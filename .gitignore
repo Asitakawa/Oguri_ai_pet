@@ -1,9 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
-chat_history.json
-.env
-.pet.lock
+data/
 dist/
 build/
 *.spec

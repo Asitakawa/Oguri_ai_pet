@@ -4,6 +4,7 @@
 import os
 from dotenv import load_dotenv
 from . import config as cfg
+from .utils import get_data_path
 
 PROVIDERS = {
     "deepseek": {
@@ -41,8 +42,7 @@ PROVIDERS = {
     },
 }
 
-_ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                         cfg.API_SETTINGS_FILE)
+_ENV_PATH = get_data_path(cfg.API_SETTINGS_FILE)
 
 
 def get_provider(provider_id):

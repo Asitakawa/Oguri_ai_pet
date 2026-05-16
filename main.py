@@ -4,62 +4,33 @@
 import os
 import sys
 import ctypes
+import socket
+
+_LOCK_SOCKET = None
+_LOCK_PORT = 45897
 
 
-def _check_instance(lock_path=".pet.lock"):
-    """检测是否有已在运行的同名进程。返回 True 表示可以继续。"""
+def _check_instance() -> bool:
+    """通过绑定本地端口检测是否已有实例在运行"""
+    global _LOCK_SOCKET
     try:
-        if os.path.exists(lock_path):
-            with open(lock_path, 'r') as f:
-                pid = int(f.read().strip())
-            try:
-                import psutil
-                if psutil.pid_exists(pid):
-                    for proc in psutil.process_iter(['pid', 'name']):
-                        if proc.info['pid'] == pid:
-                            cmd = proc.cmdline()
-                            if any('main.py' in c or 'Oguri' in c for c in cmd):
-                                return False, pid
-                            break
-                else:
-                    return True, None
-            except ImportError:
-                try:
-                    os.kill(pid, 0)
-                    return False, pid
-                except (OSError, ProcessLookupError):
-                    return True, None
-        return True, None
-    except Exception:
-        return True, None
-
-
-def _write_lock(lock_path=".pet.lock"):
-    with open(lock_path, 'w') as f:
-        f.write(str(os.getpid()))
-
-
-def _remove_lock(lock_path=".pet.lock"):
-    try:
-        if os.path.exists(lock_path):
-            os.remove(lock_path)
-    except Exception:
-        pass
+        _LOCK_SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _LOCK_SOCKET.bind(("127.0.0.1", _LOCK_PORT))
+        _LOCK_SOCKET.listen(1)
+        return True
+    except socket.error:
+        return False
 
 
 if __name__ == "__main__":
-    LOCK = ".pet.lock"
-    ok, existing_pid = _check_instance(LOCK)
-    if not ok:
+    if not _check_instance():
         ctypes.windll.user32.MessageBoxW(
             0,
-            f"小栗帽已经在运行中啦～\n\n（进程 ID: {existing_pid}）\n同一路径下只能启动一个小栗帽哦🍙",
+            "小栗帽已经在运行中啦～\n\n同一路径下只能启动一个小栗帽哦\U0001F359",
             "小栗帽桌宠",
-            0x40
+            0x40,
         )
         sys.exit(0)
-
-    _write_lock(LOCK)
 
     try:
         from src.utils import get_resource_path
@@ -74,5 +45,3 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         input("按回车退出...")
-    finally:
-        _remove_lock(LOCK)

@@ -11,7 +11,7 @@ import threading
 import os
 import gc
 from . import config as cfg
-from .utils import get_resource_path
+from .utils import get_resource_path, get_data_path
 from .chat_history import ChatHistoryManager
 from .bubble import ChatBubble
 from .animations import AnimationMixin
@@ -30,7 +30,7 @@ class KurumiPet(AnimationMixin):
     def __init__(self):
         self._init_attrs()
         self.chat_history = ChatHistoryManager(
-            cfg.CHAT_HISTORY_FILE, cfg.MAX_HISTORY_LENGTH
+            get_data_path(cfg.CHAT_HISTORY_FILE), cfg.MAX_HISTORY_LENGTH
         )
         self.ai = AIClient()
         self.status = PetStatus()
