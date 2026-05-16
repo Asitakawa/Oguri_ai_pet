@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+chat_history.json
+.env
+.pet.lock
+dist/
+build/
+*.spec
