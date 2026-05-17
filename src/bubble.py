@@ -91,7 +91,7 @@ class ChatBubble:
         self.window.deiconify()
 
     def hide(self):
-        if self.pet and not self.pet.is_auto_talking:
+        if self.pet:
             if hasattr(self.pet, '_set_pet_image'):
                 self.pet._set_pet_image("stay")
             else:

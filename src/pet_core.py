@@ -72,6 +72,7 @@ class KurumiPet(AnimationMixin):
         self._hide_timer = None
         self._click_timer = None
         self._shown_click = False
+        self._api_talking = False
 
         self.min_auto_reply_time = cfg.DEFAULT_MIN_AUTO_REPLY
         self.max_auto_reply_time = cfg.DEFAULT_MAX_AUTO_REPLY
@@ -191,13 +192,15 @@ class KurumiPet(AnimationMixin):
 
     def _activate_status_callbacks(self):
         def on_hunger_low():
-            if not self.is_dialog_showing:
-                self.root.after(0, lambda: self.show_talk(random.choice(cfg.HUNGRY_TALK_TEXTS)))
+            if not self.is_dialog_showing and not self._api_talking:
+                text = random.choice(cfg.HUNGRY_TALK_TEXTS)
+                self.root.after(0, lambda t=text: self.show_talk(t))
                 self.root.after(3000, self.hide_talk)
         def on_energy_low():
-            if not self.is_dialog_showing:
+            if not self.is_dialog_showing and not self._api_talking:
+                text = random.choice(cfg.TIRED_TALK_TEXTS)
                 self.root.after(0, lambda: self.nap_action())
-                self.root.after(0, lambda: self.show_talk(random.choice(cfg.TIRED_TALK_TEXTS)))
+                self.root.after(0, lambda t=text: self.show_talk(t))
                 self.root.after(5000, self.hide_talk)
         self.status._on_hunger_low = on_hunger_low
         self.status._on_energy_low = on_energy_low
@@ -281,13 +284,13 @@ class KurumiPet(AnimationMixin):
         self.bubble.update_position(force=True)
 
     def _on_enter(self, e):
-        if not self.is_dragging and not self.is_auto_talking:
+        if not self.is_dragging and not self.is_auto_talking and not self._api_talking:
             self.is_hovering = True
             img_key = "talk" if self.is_dialog_showing else "touch"
             self._set_pet_image(img_key)
 
     def _on_leave(self, e):
-        if not self.is_dragging and not self.is_auto_talking:
+        if not self.is_dragging and not self.is_auto_talking and not self._api_talking:
             self.is_hovering = False
             img_key = "talk" if self.is_dialog_showing else "stay"
             self._set_pet_image(img_key)
@@ -682,34 +685,93 @@ class KurumiPet(AnimationMixin):
 
     # ===================== 自动说话 =====================
     def _start_threads(self):
-        threading.Thread(target=self._auto_talk_loop, daemon=True).start()
+        threading.Thread(target=self._preset_talk_loop, daemon=True).start()
+        threading.Thread(target=self._api_talk_loop, daemon=True).start()
 
-    def _auto_talk_loop(self):
+    def _preset_talk_loop(self):
+        """预置文案自动说话线（独立线程）"""
+
+        def _say(text, anim=None):
+            try:
+                self.root.after(0, lambda: self.show_talk(text))
+                if anim:
+                    self.root.after(0, anim)
+            except Exception:
+                pass
+
+        # 启动问候
+        self._sleep_chunk(random.randint(10, 20))
+        if self.running:
+            self.is_auto_talking = True
+            _say(random.choice(cfg.FALLBACK_TALK_TEXTS))
+            time.sleep(cfg.AUTO_TALK_DURATION)
+            self.root.after(0, self.hide_talk)
+            self.is_auto_talking = False
+
         while self.running:
-            time.sleep(random.randint(
-                self.min_auto_reply_time, self.max_auto_reply_time
-            ))
+            delay = random.randint(self.min_auto_reply_time, self.max_auto_reply_time)
+            self._sleep_chunk(delay)
+            if not self.running:
+                break
+
+            # 冲突仲裁：API 正在说话则本轮跳过
+            if self._api_talking:
+                continue
+
             try:
                 self.is_auto_talking = True
+                h = self.status.hunger_pct
+                e = self.status.energy_pct
                 r = random.random()
-                if self.status.hunger_pct < 30 and r < 0.4:
-                    text = random.choice(cfg.HUNGRY_TALK_TEXTS)
-                    self.root.after(0, lambda t=text: (self.show_talk(t), self.tilt_head()))
-                elif self.status.energy_pct < 25 and r < 0.4:
-                    text = random.choice(cfg.TIRED_TALK_TEXTS)
-                    self.root.after(0, lambda t=text: (self.show_talk(t), self.nap_action(duration=1.5)))
-                elif r < 0.5:
-                    text = self.ai.auto_talk_prompt()
-                    self.root.after(0, lambda t=text: (self.show_talk(t), self.tilt_head()))
+                if h < 30 and r < 0.4:
+                    _say(random.choice(cfg.HUNGRY_TALK_TEXTS), self.tilt_head)
+                elif e < 25 and r < 0.4:
+                    _say(random.choice(cfg.TIRED_TALK_TEXTS),
+                         lambda: self.nap_action(duration=1.5))
                 else:
-                    text = random.choice(cfg.FALLBACK_TALK_TEXTS)
-                    self.root.after(0, lambda t=text: self.show_talk(t))
+                    _say(random.choice(cfg.FALLBACK_TALK_TEXTS))
                 time.sleep(cfg.AUTO_TALK_DURATION)
                 self.root.after(0, self.hide_talk)
+            except Exception:
+                pass
+            finally:
                 self.is_auto_talking = False
-            except Exception as e:
-                print(f"自动说话异常：{e}")
-                self.is_auto_talking = False
+
+    def _api_talk_loop(self):
+        """AI 自动说话线（独立线程，仅 API 已配置时生效）"""
+
+        def _say(text):
+            try:
+                self.root.after(0, lambda: self.show_talk(text))
+            except Exception:
+                pass
+
+        while self.running:
+            delay = random.randint(self.min_auto_reply_time, self.max_auto_reply_time)
+            self._sleep_chunk(delay)
+            if not self.running:
+                break
+            if not self.ai.is_configured:
+                continue
+
+            try:
+                self._api_talking = True
+                text = self.ai.auto_talk_prompt()
+                _say(text)
+                self.root.after(0, self.tilt_head)
+                time.sleep(cfg.AUTO_TALK_DURATION)
+                self.root.after(0, self.hide_talk)
+            except Exception:
+                pass
+            finally:
+                self._api_talking = False
+
+    def _sleep_chunk(self, total_seconds):
+        remaining = total_seconds
+        while remaining > 0 and self.running:
+            chunk = min(2, remaining)
+            time.sleep(chunk)
+            remaining -= chunk
 
     # ===================== 缩放系统 =====================
     def _show_size_menu(self):
@@ -829,7 +891,7 @@ class KurumiPet(AnimationMixin):
                   font=('Microsoft YaHei', 10), bg=cfg.C_ROSE,
                   fg='white', relief='flat', padx=18, pady=8,
                   activebackground=cfg.C_ROSE_DEEP,
-                  command=lambda: (min_var.set(5), max_var.set(360))
+                  command=lambda: (min_var.set(30), max_var.set(120))
                   ).pack(side='left', padx=6)
         tk.Button(btn_frame, text="保存",
                   font=('Microsoft YaHei', 10, 'bold'),
