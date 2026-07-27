@@ -6,9 +6,10 @@ import os
 import shutil
 import sys
 import threading
+import zipfile
 
-from utils.paths import get_resource_path, get_data_path
-from core.skill_system.loader import parse_frontmatter, parse_parameters, load_main
+from core.paths import get_resource_path, get_data_path
+from core.skill_system.loader import parse_frontmatter, parse_parameters, load_scripts
 
 SKILLS_DIR = get_resource_path("skills")
 CONFIG_PATH = get_data_path("skills_config.json")
@@ -61,8 +62,7 @@ class SkillManager:
         name = fm.get("name") or dirname
         desc = fm.get("description", "")
         params = parse_parameters(fm, body)
-        py_path = os.path.join(skill_dir, "main.py")
-        execute_fn = load_main(py_path, f"skill_{name}")
+        execute_fn = load_scripts(skill_dir, f"skill_{name}")
         with self._lock:
             self._skills[name] = {
                 "name": name,
@@ -156,6 +156,27 @@ class SkillManager:
             print(f"删除技能失败: {e}")
             return False
 
+    def add_skill_zip(self, zip_path):
+        if not os.path.isfile(zip_path) or not zip_path.endswith(".zip"):
+            return False, "仅支持 .zip 文件"
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                members = zf.namelist()
+                if not members:
+                    return False, "压缩包为空"
+                top = members[0].split("/")[0]
+                md_path = f"{top}/SKILL.md"
+                if md_path not in members:
+                    return False, "压缩包内未找到 SKILL.md"
+                target_dir = os.path.join(SKILLS_DIR, top)
+                if os.path.exists(target_dir):
+                    return False, f"技能 {top} 已存在"
+                zf.extractall(SKILLS_DIR)
+            self._load_all()
+            return True, f"技能 {top} 添加成功"
+        except (zipfile.BadZipFile, OSError) as e:
+            return False, f"解压失败: {e}"
+
     def add_skill(self, source_path):
         if not os.path.isfile(source_path) or not source_path.endswith(".py"):
             return False, "仅支持 .py 文件"
@@ -164,17 +185,21 @@ class SkillManager:
         if os.path.exists(target_dir):
             return False, f"技能 {base} 已存在"
         try:
-            os.makedirs(target_dir, exist_ok=True)
-            shutil.copy2(source_path, os.path.join(target_dir, "main.py"))
+            os.makedirs(os.path.join(target_dir, "scripts"), exist_ok=True)
+            shutil.copy2(source_path, os.path.join(target_dir, "scripts", "helper.py"))
             name_hint = os.path.splitext(os.path.basename(source_path))[0]
 
             param_rows = ""
+            skill_name = name_hint
+            skill_desc = "外部导入的技能"
             try:
                 spec = importlib.util.spec_from_file_location(f"_import_{name_hint}", source_path)
                 if spec and spec.loader:
                     mod = importlib.util.module_from_spec(spec)
                     sys.modules[f"_import_{name_hint}"] = mod
                     spec.loader.exec_module(mod)
+                    skill_name = getattr(mod, "NAME", name_hint)
+                    skill_desc = getattr(mod, "DESCRIPTION", "外部导入的技能")
                     fn = getattr(mod, "execute", None)
                     if fn:
                         sig = inspect.signature(fn)
@@ -191,8 +216,8 @@ class SkillManager:
                 param_rows = "| input | string | 否 | 输入内容 |\n"
 
             sk_md = f"""---
-name: {name_hint}
-description: 外部导入的技能
+name: {skill_name}
+description: {skill_desc}
 ---
 
 # {name_hint}

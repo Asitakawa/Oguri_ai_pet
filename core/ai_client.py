@@ -7,7 +7,7 @@ import random
 import requests
 from PIL import ImageGrab
 from core import config as cfg
-from ai.providers import get_chat_url, load_api_settings, get_provider
+from core.ai_providers import get_chat_url, load_api_settings, get_provider
 
 
 class AIClient:
@@ -78,8 +78,8 @@ class AIClient:
                     data["tools"] = tools
                     data["tool_choice"] = "auto"
 
-                tout = (15, 120) if tools else ((15, 60) if img_base64 else (10, 30))
-                result = self._post(data, tout)
+                timeout = 60 if img_base64 or tools else 30
+                result = self._post(data, timeout)
                 if result is None:
                     continue
 
@@ -99,14 +99,14 @@ class AIClient:
                     data["messages"] = messages
                     data.pop("tool_choice", None)
                     for _ in range(5):
-                        second = self._post(data, tout)
+                        second = self._post(data, timeout)
                         if not second:
                             break
                         smsg = second["choices"][0]["message"]
                         if smsg.get("content"):
                             return smsg["content"].strip()
                         if not smsg.get("tool_calls"):
-                            return "处理完成了"
+                            return "处理完成にゃ～"
                         messages.append(smsg)
                         for tc in smsg["tool_calls"]:
                             tr = execute_tool(tc["function"]["name"], tc["function"]["arguments"])
@@ -114,7 +114,7 @@ class AIClient:
                         data["messages"] = messages
                     continue
 
-                return (msg.get("content") or "处理完成了").strip()
+                return (msg.get("content") or "处理完成にゃ～").strip()
 
             except requests.exceptions.Timeout:
                 print(f"AI超时（第{attempt + 1}次）")
@@ -140,20 +140,30 @@ class AIClient:
     def capture_screen():
         try:
             img = ImageGrab.grab()
-            img.thumbnail((640, 480))
+            img.thumbnail((1000, 750))
             buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=25)
+            img.save(buf, format="JPEG", quality=60)
             return base64.b64encode(buf.getvalue()).decode()
         except Exception as e:
             print(f"截图失败: {e}")
             return None
+
+    _PERSONALITY = (
+        "回复要像小栗帽本人说话：\n"
+        "- 天然呆 + 大胃王性格（迷糊贪吃那种）\n"
+        "- 短句、口语、像搭档在耳边碎嘴\n"
+        "- 不堆格式、不念稿、不端架子\n"
+        "- 该有温度时有温度（鼓励、安抚），该吐槽时吐槽\n"
+        "- 偶尔冒出吃的、跑步相关的联想是加分项\n"
+        "字数 10-30 字，超出就砍。"
+    )
 
     def ask(self, user_message, with_screenshot=False, history_context=None,
             tools=None, execute_tool=None):
         img_base64 = self.capture_screen() if with_screenshot else ""
 
         extra = "屏幕内容已截取，请结合屏幕回答；如果问题与屏幕无关，就别硬扯。\n" if with_screenshot else ""
-        prompt = user_message if user_message else ("看看屏幕\n" + extra if extra else "看看屏幕")
+        prompt = f"用户问：{user_message}\n{extra}{self._PERSONALITY}"
 
         result = self.call(prompt, img_base64, history_context=history_context,
                           tools=tools, execute_tool=execute_tool)
@@ -161,10 +171,10 @@ class AIClient:
             result = random.choice(cfg.FALLBACK_AI_RESPONSES)
         return result, img_base64
 
-    def auto_talk_prompt(self, history_context=None):
+    def auto_talk_prompt(self):
         img_base64 = self.capture_screen()
-        prompt = "小栗帽想和训练员说说话："
-        result = self.call(prompt, img_base64, history_context=history_context)
+        prompt = f"小栗帽想和训练员说说话：\n{self._PERSONALITY}"
+        result = self.call(prompt, img_base64, history_context=None)
         if result is None:
             result = random.choice(cfg.FALLBACK_TALK_TEXTS)
         return result

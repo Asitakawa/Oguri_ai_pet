@@ -18,7 +18,7 @@ def _load_psutil():
         return None
 
 from core import config as cfg
-from utils.paths import get_resource_path, get_data_path
+from core.paths import get_resource_path, get_data_path
 from core.chat_history import ChatHistoryManager
 from ui.bubble import ChatBubble
 from ui.animations import AnimationMixin
@@ -26,9 +26,9 @@ from ui.pet_sprite import PetSprite
 from ui.input_bar import InputBar
 from ui.status_bar import StatusBar
 from ui.dialogs import UIDialogs
-from ai.client import AIClient
+from core.ai_client import AIClient
 from core.pet_state import PetStatus
-from core.reminder import ReminderManager
+from core.reminder import ScheduleManager
 from core.skill_system.manager import SkillManager
 
 
@@ -40,7 +40,7 @@ class KurumiPet(AnimationMixin):
         )
         self.ai = AIClient()
         self.dialogs = UIDialogs(self)
-        self.reminder_manager = ReminderManager(self)
+        self.schedule_manager = ScheduleManager(self)
         self.skill_manager = SkillManager(self)
         self.sprite = PetSprite(self)
         self.input_bar = InputBar(self)
@@ -146,31 +146,35 @@ class KurumiPet(AnimationMixin):
         self._build_menu()
 
     def _build_menu(self):
-        self.menu = Menu(self.root, tearoff=0, font=(cfg.FONT_FAMILY, 10),
-                         bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
-                         activeforeground=cfg.C_WOOD, relief='flat', bd=0)
-        cmds = [
-            ("💬 对话", self.input_bar.show),
-            ("🍙 喂饭团", self._feed_pet),
-            None,
-            ("📊 状态", self._toggle_status_bar),
-            ("📋 聊天记录", self.dialogs.show_chat_history),
-            ("🗑 清空记录", self._clear_chat_history),
-            None,
-            ("📏 调整大小", self.dialogs.show_size_menu),
-            ("⚡ 技能管理", self.dialogs.show_skill_manager),
-            ("🔑 API 设置", self.dialogs.show_api_settings),
-            ("🔤 字体设置", self.dialogs.show_font_settings),
-            ("⚙ 系统设置", self.dialogs.show_settings),
-            None,
-            ("🔄 重启", self.restart),
-            ("🚪 退出", self.quit),
-        ]
-        for item in cmds:
-            if item is None:
-                self.menu.add_separator()
-            else:
-                self.menu.add_command(label=item[0], command=item[1])
+        m = self.menu = Menu(self.root, tearoff=0, font=(cfg.FONT_FAMILY, 10),
+                             bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
+                             activeforeground=cfg.C_WOOD, relief='flat', bd=0)
+
+        m.add_command(label="💬 对话", command=self.input_bar.show)
+        m.add_command(label="🍙 喂饭团", command=self._feed_pet)
+        m.add_separator()
+
+        sub = Menu(m, tearoff=0, font=(cfg.FONT_FAMILY, 10),
+                   bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
+                   activeforeground=cfg.C_WOOD, relief='flat', bd=0)
+        sub.add_command(label="📊 查看状态", command=self._toggle_status_bar)
+        sub.add_command(label="📋 聊天记录", command=self.dialogs.show_chat_history)
+        sub.add_command(label="🗑 清空记录", command=self._clear_chat_history)
+        m.add_cascade(label="📋 记录", menu=sub)
+
+        sub = Menu(m, tearoff=0, font=(cfg.FONT_FAMILY, 10),
+                   bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
+                   activeforeground=cfg.C_WOOD, relief='flat', bd=0)
+        sub.add_command(label="📏 调整大小", command=self.dialogs.show_size_menu)
+        sub.add_command(label="⚡ 技能管理", command=self.dialogs.show_skill_manager)
+        sub.add_command(label="🔑 API 设置", command=self.dialogs.show_api_settings)
+        sub.add_command(label="🔤 字体设置", command=self.dialogs.show_font_settings)
+        sub.add_command(label="⚙ 系统设置", command=self.dialogs.show_settings)
+        m.add_cascade(label="⚙ 设置", menu=sub)
+
+        m.add_separator()
+        m.add_command(label="🔄 重启", command=self.restart)
+        m.add_command(label="🚪 退出", command=self.quit)
 
     def _show_menu(self, e):
         self.menu.post(e.x_root, e.y_root)
@@ -318,6 +322,9 @@ class KurumiPet(AnimationMixin):
         print(f"💬 {text}")
 
     def hide_talk(self):
+        if hasattr(self, '_hide_timer') and self._hide_timer:
+            self.root.after_cancel(self._hide_timer)
+            self._hide_timer = None
         self.is_dialog_showing = False
         self.bubble.hide()
         self._set_pet_image("touch" if self.is_hovering else "stay")
@@ -384,7 +391,7 @@ class KurumiPet(AnimationMixin):
             self.root.after(0, lambda: self._handle_ai_response(r))
         except Exception as e:
             print(f"AI处理错误: {e}")
-            r = "哎呀出错了😥"
+            r = "啊，出错了"
             self.chat_history.add("assistant", r)
             self.root.after(0, lambda: self._handle_ai_response(r))
         finally:
@@ -392,7 +399,7 @@ class KurumiPet(AnimationMixin):
 
     def _handle_ai_response(self, text):
         if not text or not text.strip():
-            text = "处理完成にゃ～"
+            text = "处理完成了"
         self.show_talk(text)
         self.root.after(6000, self.hide_talk)
 
@@ -410,6 +417,7 @@ class KurumiPet(AnimationMixin):
             except Exception:
                 pass
 
+        print(f"预设自动回复线程已启动, 初始问候等待10-20秒...")
         self._sleep_chunk(random.randint(10, 20))
         if self.running:
             self.is_auto_talking = True
@@ -417,9 +425,11 @@ class KurumiPet(AnimationMixin):
             time.sleep(cfg.AUTO_TALK_DURATION)
             self.root.after(0, self.hide_talk)
             self.is_auto_talking = False
+            print("预设自动回复: 初始问候完成")
 
         while self.running:
             delay = random.randint(self.preset_min_interval, self.preset_max_interval)
+            print(f"预设自动回复: 等待 {delay} 秒后下一轮")
             self._sleep_chunk(delay)
             if not self.running:
                 break
@@ -451,16 +461,22 @@ class KurumiPet(AnimationMixin):
             except Exception:
                 pass
 
+        print(f"AI自动回复线程已启动, 是否配置: {self.ai.is_configured}")
         while self.running:
             delay = random.randint(self.min_auto_reply_time, self.max_auto_reply_time)
+            print(f"AI自动回复: 等待 {delay} 秒后检查")
             self._sleep_chunk(delay)
             if not self.running:
                 break
-            if not self.ai.is_configured or self._is_processing:
+            if not self.ai.is_configured:
+                continue
+            if self._is_processing:
+                print("AI自动回复: 用户正在对话中, 跳过本轮")
                 continue
             try:
                 self._api_talking = True
-                text = self.ai.auto_talk_prompt()
+                ctx = self.chat_history.get_context(10)
+                text = self.ai.auto_talk_prompt(history_context=ctx)
                 _say(text)
                 self.root.after(0, self.tilt_head)
                 time.sleep(cfg.AUTO_TALK_DURATION)
@@ -546,7 +562,7 @@ class KurumiPet(AnimationMixin):
     # ── 重启 ──────────────────────────────────
     def restart(self):
         self.chat_history.save(sync=True)
-        self.reminder_manager.stop()
+        self.schedule_manager.stop()
         self.status.stop()
         subprocess.Popen([sys.executable, "main.py"])
         self.root.destroy()
@@ -561,7 +577,7 @@ class KurumiPet(AnimationMixin):
         self.running = False
         self.stop_all_animations()
         self.status.stop()
-        self.reminder_manager.stop()
+        self.schedule_manager.stop()
         self.chat_history.save(sync=True)
 
         info = self.get_system_info()

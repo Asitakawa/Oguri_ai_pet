@@ -1,23 +1,19 @@
 ---
-name: weather
-description: 查询指定城市的当前天气。当用户询问天气、温度、下雨、多少度、冷不冷等情况时使用。
+name: get_weather
+description: 查询指定城市的当前天气。当用户问天气、温度、多少度、冷不冷、下雨等情况时使用。参数 city 传入城市名。
 ---
-
-# Weather Tool
-
-Single tool for querying weather.
 
 ## Parameters
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| city | string | 是 | 城市名，如"深圳"、"北京"、"上海" |
+| city | string | 是 | 城市名，支持中文（深圳）或英文（shenzhen） |
 
-## Returns
+## 返回值
 
-返回天气数据字符串，包含城市、天气状况、温度、湿度、风速。
+返回天气数据：天气状况、温度、湿度、风速。
 
-## Examples
+## 示例
 
-用户说"深圳今天冷吗" → 调用 `get_weather` 获取数据后回复
-用户说"北京天气怎么样" → 同上
+用户说"深圳今天冷吗" → 调用 get_weather(city="深圳")
+用户说"北京天气" → 调用 get_weather(city="北京")

@@ -1,11 +1,10 @@
-"""SKILL.md 解析 + main.py 动态加载"""
+"""SKILL.md 解析 + scripts/ 动态加载"""
 import importlib.util
 import os
 import sys
 
 
 def parse_frontmatter(text):
-    """解析 SKILL.md 中 --- 包裹的 YAML 前端数据"""
     if not text.startswith("---"):
         return {}, text
     lines = text.split("\n")
@@ -16,12 +15,10 @@ def parse_frontmatter(text):
             break
     if end is None:
         return {}, text
-
     data = {}
     ck = None
     cv = []
     ml = False
-
     for line in lines[1:end]:
         if ml:
             if line and line[0] in (" ", "\t"):
@@ -42,12 +39,10 @@ def parse_frontmatter(text):
             data[k] = v
     if ml:
         data[ck] = "\n".join(cv)
-
     return data, "\n".join(lines[end + 1:])
 
 
 def parse_parameters(frontmatter, body):
-    """从 body 中的 markdown 表格解析参数"""
     params = []
     if "parameters" in frontmatter:
         raw = frontmatter["parameters"]
@@ -72,22 +67,25 @@ def parse_parameters(frontmatter, body):
     return params
 
 
-def load_main(py_path, mod_name):
-    """动态加载 main.py 并返回 execute 函数"""
-    if not os.path.isfile(py_path):
+def load_scripts(skill_dir, mod_name):
+    """加载技能目录下的 scripts/ 中的 Python 文件，返回 execute 函数"""
+    scripts_dir = os.path.join(skill_dir, "scripts")
+    if not os.path.isdir(scripts_dir):
         return None
-    try:
-        spec = importlib.util.spec_from_file_location(mod_name, py_path)
-        if spec is None or spec.loader is None:
-            return None
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[mod_name] = mod
-        spec.loader.exec_module(mod)
-        execute = getattr(mod, "execute", None)
-        if execute is None:
-            print(f"技能 {mod_name} main.py 缺少 execute()")
-            return None
-        return execute
-    except Exception as e:
-        print(f"技能 {mod_name} 加载失败: {e}")
-        return None
+    for fname in sorted(os.listdir(scripts_dir)):
+        if fname.endswith(".py"):
+            py_path = os.path.join(scripts_dir, fname)
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    f"{mod_name}_{fname[:-3]}", py_path)
+                if spec is None or spec.loader is None:
+                    continue
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[f"{mod_name}_{fname[:-3]}"] = mod
+                spec.loader.exec_module(mod)
+                execute = getattr(mod, "execute", None)
+                if execute:
+                    return execute
+            except Exception as e:
+                print(f"技能脚本加载失败 {fname}: {e}")
+    return None

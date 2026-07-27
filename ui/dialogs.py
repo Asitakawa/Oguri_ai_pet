@@ -7,7 +7,7 @@ import time
 import os
 
 from core import config as cfg
-from ai.providers import (
+from core.ai_providers import (
     load_api_settings, save_api_settings, test_connection,
     get_provider_list, get_models, get_provider,
 )
@@ -103,46 +103,64 @@ class UIDialogs:
     # ── 系统设置 ──────────────────────────────
     def show_settings(self):
         p = self.pet
-        win = self._window(p, "设置", 380, 270)
+        win = self._window(p, "设置", 380, 350)
         _title_bar(win, "⚙  系统设置")
 
         cnt = p.chat_history.stats.get('total_messages', 0)
-        tk.Label(win, text=f"已保存 {cnt} 条聊天记录",
+        tk.Label(win, text=f"已保存 {cnt // 2} 轮聊天记录",
                  font=_FONT, bg=cfg.C_BG,
-                 fg=cfg.C_ASH_DARK).pack(pady=(18, 12))
+                 fg=cfg.C_ASH_DARK).pack(pady=(14, 6))
 
         frame = tk.Frame(win, bg=cfg.C_BG)
         frame.pack(pady=4)
-        min_var = tk.IntVar(value=p.min_auto_reply_time)
-        max_var = tk.IntVar(value=p.max_auto_reply_time)
 
-        for label, var, lo, hi in [("最短间隔", min_var, 1, 99),
-                                    ("最长间隔", max_var, 2, 300)]:
+        ai_min_v = tk.IntVar(value=p.min_auto_reply_time)
+        ai_max_v = tk.IntVar(value=p.max_auto_reply_time)
+        pr_min_v = tk.IntVar(value=p.preset_min_interval)
+        pr_max_v = tk.IntVar(value=p.preset_max_interval)
+
+        mem_v = tk.IntVar(value=cfg.MEMORY_CONTEXT_SIZE // 2)
+        rows = [("AI最短", ai_min_v, 0, 9999), ("AI最长", ai_max_v, 1, 9999),
+                ("预设最短", pr_min_v, 0, 9999), ("预设最长", pr_max_v, 1, 9999),
+                ("记忆轮数", mem_v, 10, 500)]
+        for label, var, lo, hi in rows:
             row = tk.Frame(frame, bg=cfg.C_BG)
-            row.pack(fill='x', pady=3)
+            row.pack(fill='x', pady=2)
             tk.Label(row, text=label, font=_FONT, bg=cfg.C_BG,
                      fg=cfg.C_TEXT, width=10, anchor='e').pack(side='left', padx=6)
             tk.Spinbox(row, from_=lo, to=hi, textvariable=var,
                        font=_FONT, width=6, bg='white',
                        fg=cfg.C_TEXT, relief='flat', bd=1,
                        ).pack(side='left', padx=4)
-            tk.Label(row, text="秒", font=_FONT, bg=cfg.C_BG,
+            unit = "轮（1轮=我问+你答）" if label == "记忆轮数" else "秒"
+            tk.Label(row, text=unit, font=_FONT, bg=cfg.C_BG,
                      fg=cfg.C_ASH_DARK).pack(side='left')
 
         def do_save():
-            if min_var.get() >= max_var.get():
-                messagebox.showerror("错误", "最短间隔必须小于最长间隔")
-                return
-            p.min_auto_reply_time = min_var.get()
-            p.max_auto_reply_time = max_var.get()
-            p.show_talk(cfg.SAVE_OK.format(min=min_var.get(), max=max_var.get()))
-            p.root.after(3000, p.hide_talk)
+            for a, b, msg in [(ai_min_v, ai_max_v, "AI"), (pr_min_v, pr_max_v, "预设")]:
+                if a.get() > b.get():
+                    messagebox.showerror("错误", f"{msg}最短不能大于最长")
+                    return
+            p.min_auto_reply_time = ai_min_v.get()
+            p.max_auto_reply_time = ai_max_v.get()
+            p.preset_min_interval = pr_min_v.get()
+            p.preset_max_interval = pr_max_v.get()
+            cfg.MIN_AUTO_REPLY = ai_min_v.get()
+            cfg.MAX_AUTO_REPLY = ai_max_v.get()
+            cfg.PRESET_MIN_INTERVAL = pr_min_v.get()
+            cfg.PRESET_MAX_INTERVAL = pr_max_v.get()
+            cfg.MEMORY_CONTEXT_SIZE = mem_v.get() * 2
+            cfg._save()
+            p.show_talk("设置已保存")
+            p.root.after(2000, p.hide_talk)
             win.destroy()
 
         frame2 = tk.Frame(win, bg=cfg.C_BG)
-        frame2.pack(pady=(16, 0))
+        frame2.pack(pady=(10, 0))
         _btn(frame2, "↺ 默认", cfg.C_ROSE,
-             command=lambda: (min_var.set(30), max_var.set(120)),
+             command=lambda: (
+                 ai_min_v.set(cfg.DEFAULT_MIN_AUTO_REPLY), ai_max_v.set(cfg.DEFAULT_MAX_AUTO_REPLY),
+                 pr_min_v.set(120), pr_max_v.set(600), mem_v.set(200)),
              ).pack(side='left', padx=6)
         _btn(frame2, "✓ 保存", cfg.C_MINT,
              command=do_save).pack(side='left', padx=6)
@@ -274,8 +292,8 @@ class UIDialogs:
                 return
             save_api_settings(pk, m, k)
             p.ai.switch(pk, m, k)
-            rl.config(text="已保存 ✅", fg=cfg.C_MINT_DEEP)
-            p.show_talk("API 设置已保存にゃ～✨")
+            rl.config(text="已保存", fg=cfg.C_MINT_DEEP)
+            p.show_talk("API 设置已保存")
             p.root.after(2000, p.hide_talk)
 
         bt = _btn(bf, "📡 测试连接", cfg.C_SKY, command=do_test)
@@ -432,7 +450,7 @@ class UIDialogs:
         _btn(bf, "✓ 保存", cfg.C_MINT, command=lambda: (
             setattr(cfg, 'FONT_FAMILY', sel.get()),
             setattr(cfg, 'FONT_SIZE', max(cfg.FONT_SIZE_MIN, min(cfg.FONT_SIZE_MAX, sv.get()))),
-            p.show_talk("字体设置已保存にゃ～✨"),
+            p.show_talk("字体设置已保存"),
             p.root.after(2000, p.hide_talk), win.destroy(),
         )).pack(side='left', padx=4)
         _btn(bf, "✕ 关闭", cfg.C_ROSE, command=win.destroy).pack(side='left', padx=4)
@@ -451,41 +469,35 @@ class UIDialogs:
                 _label_row(lf, "暂无可用技能").pack(pady=30)
                 return
             for sk in skills:
-                row = tk.Frame(lf, bg=cfg.C_BG, bd=0)
-                row.pack(fill='x', padx=12, pady=3)
+                # 第一行：复选框 + 名称 + 删除按钮
+                row1 = tk.Frame(lf, bg=cfg.C_BG, bd=0)
+                row1.pack(fill='x', padx=12, pady=(3, 0))
 
-                # 启用/关闭复选框
                 var = tk.BooleanVar(value=sk["enabled"])
                 def toggle(nm=sk["name"], v=var):
                     p.skill_manager.toggle(nm, v.get())
-                tk.Checkbutton(row, variable=var, command=toggle,
+                tk.Checkbutton(row1, variable=var, command=toggle,
                                bg=cfg.C_BG, activebackground=cfg.C_BG,
                                highlightthickness=0).pack(side='left')
 
-                # 名称
-                tk.Label(row, text=sk["name"],
+                tk.Label(row1, text=sk["name"],
                          font=_FONT_BOLD, bg=cfg.C_BG,
                          fg=cfg.C_TEXT, anchor='w',
                          ).pack(side='left', padx=(4, 0))
 
-                # 描述（截断）
-                desc = sk.get("description", "")
-                if desc:
-                    tk.Label(row, text=desc[:50],
-                             font=('Microsoft YaHei', 9), bg=cfg.C_BG,
-                             fg=cfg.C_ASH_DARK, anchor='w',
-                             ).pack(side='left', padx=(8, 0))
-
-                # 删除按钮
                 def do_del(nm=sk["name"]):
-                    if messagebox.askyesno("确认删除", f"确定要删除技能「{nm}」吗？\n该操作不可恢复。"):
+                    if messagebox.askyesno("确认删除", f"删除技能「{nm}」？\n技能目录和文件将被完全移除，不可恢复。"):
                         p.skill_manager.remove_skill(nm)
                         refresh()
-                tk.Button(row, text="✕", font=('Microsoft YaHei', 9),
-                          bg=cfg.C_ROSE, fg='white', relief='flat',
-                          bd=0, padx=8, pady=2, cursor='hand2',
-                          activebackground=cfg.C_ROSE_DEEP,
-                          command=do_del).pack(side='right', padx=(2, 0))
+                _btn(row1, "删除", cfg.C_ROSE, command=do_del).pack(side='right', padx=2)
+
+                # 第二行：描述（超出 25 字自动换行）
+                desc = sk.get("description", "")
+                if desc:
+                    tk.Label(lf, text=desc, font=('Microsoft YaHei', 9),
+                             bg=cfg.C_BG, fg=cfg.C_ASH_DARK, anchor='w',
+                             wraplength=350, justify='left',
+                             ).pack(fill='x', padx=(40, 12), pady=(1, 2))
 
                 # 分隔线
                 tk.Frame(lf, height=1, bg=cfg.C_ASH_LIGHT).pack(fill='x', padx=12)
@@ -503,29 +515,32 @@ class UIDialogs:
         canvas.bind('<Enter>', lambda e: canvas.bind_all(
             '<MouseWheel>', lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), 'units')))
         canvas.bind('<Leave>', lambda e: canvas.unbind_all('<MouseWheel>'))
+        refresh()
 
-        bf = tk.Frame(win, bg=cfg.C_BG)
-        bf.pack(fill='x', padx=12, pady=(0, 10))
-        _btn(bf, "+ 添加技能", cfg.C_SKY,
+        bf = tk.Frame(win, bg=cfg.C_BG, highlightbackground=cfg.C_ASH_LIGHT, highlightthickness=1)
+        bf.pack(fill='x', padx=0, pady=0)
+        inner_bf = tk.Frame(bf, bg=cfg.C_BG)
+        inner_bf.pack(fill='x', padx=12, pady=6)
+        _btn(inner_bf, "+ 添加技能", cfg.C_SKY,
              command=lambda: self._add_skill_dlg(win, refresh),
              ).pack(side='left', padx=4)
-        _btn(bf, "↻ 刷新", cfg.C_ASH,
+        _btn(inner_bf, "↻ 刷新", cfg.C_ASH,
              command=refresh).pack(side='left', padx=4)
-        _btn(bf, "✕ 关闭", cfg.C_ROSE,
+        _btn(inner_bf, "✕ 关闭", cfg.C_ROSE,
              command=win.destroy).pack(side='right', padx=4)
-        refresh()
 
     def _add_skill_dlg(self, parent, refresh_cb):
         path = filedialog.askopenfilename(
-            parent=parent, title="选择技能文件",
-            filetypes=[("Python 文件", "*.py"), ("所有文件", "*.*")],
+            parent=parent, title="选择技能",
+            filetypes=[("技能包", "*.zip"), ("Python 文件", "*.py"), ("所有文件", "*.*")],
         )
         if not path:
             return
         pet = self.pet
-        ok, msg = pet.skill_manager.add_skill(path)
+        is_zip = path.lower().endswith(".zip")
+        ok, msg = pet.skill_manager.add_skill_zip(path) if is_zip else pet.skill_manager.add_skill(path)
         if ok:
-            pet.show_talk("技能添加成功にゃ～✨")
+            pet.show_talk("技能添加成功")
             pet.root.after(2000, pet.hide_talk)
         else:
             messagebox.showerror("添加失败", msg)

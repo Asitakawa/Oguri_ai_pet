@@ -5,3 +5,7 @@ data/
 ui_backup/
 .venv/
 .idea/
+build/
+dist/
+*.spec
+*.exe
