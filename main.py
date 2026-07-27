@@ -3,15 +3,14 @@
 """
 import os
 import sys
-import ctypes
 import socket
+import ctypes
 
-_LOCK_SOCKET = None
 _LOCK_PORT = 45897
+_LOCK_SOCKET = None
 
 
 def _check_instance() -> bool:
-    """通过绑定本地端口检测是否已有实例在运行"""
     global _LOCK_SOCKET
     try:
         _LOCK_SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -25,18 +24,14 @@ def _check_instance() -> bool:
 if __name__ == "__main__":
     if not _check_instance():
         ctypes.windll.user32.MessageBoxW(
-            0,
-            "小栗帽已经在运行中啦～\n\n同一路径下只能启动一个小栗帽哦\U0001F359",
-            "小栗帽桌宠",
-            0x40,
+            0, "小栗帽已经在运行中啦～\n\n同一路径下只能启动一个小栗帽哦\U0001F359",
+            "小栗帽桌宠", 0x40,
         )
         sys.exit(0)
 
     try:
-        from src.utils import get_resource_path
-        from src.pet_core import KurumiPet
-
-        os.makedirs(get_resource_path("pic"), exist_ok=True)
+        from ui.pet_window import KurumiPet
+        os.makedirs("resources/images", exist_ok=True)
         KurumiPet()
     except KeyboardInterrupt:
         print("\n程序已被用户中断")

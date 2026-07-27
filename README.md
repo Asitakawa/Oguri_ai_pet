@@ -62,7 +62,7 @@ python main.py
 
 ## 图片素材说明
 
-`pic/` 目录需要 4 张 PNG 图片（透明背景，推荐 180×180）：
+`resources/images/` 目录需要 4 张 PNG 图片（透明背景，推荐 180×180）：
 
 | 文件名 | 用途 |
 |--------|------|
@@ -162,20 +162,31 @@ API 设置          配置大模型（厂商/模型/Key）
 ```
 main.py                    入口（单实例锁）
 requirements.txt           依赖
-.gitignore
-pic/                       图片素材（4张PNG）
-src/
-├── pet_core.py            核心主类（窗口/事件/生命周期）
-├── config.py              全局配置（色板/阈值/文案）
-├── utils.py               工具（资源路径/Canvas圆角扩展）
-├── chat_history.py        聊天记忆（防抖写入/线程安全）
-├── bubble.py              漫画气泡（三角尾巴/阴影）
-├── animations.py          动画系统（摇晃/弹跳/惯性/吃东西/打盹/歪头）
-├── ai_client.py           多厂商 AI 客户端
-├── api_providers.py       API 厂商预设
-├── pet_status.py          饱腹/活力双值状态机
-├── status_bar.py          悬浮进度条
-├── __init__.py
+core/                      领域层
+├── config.py              配置常量
+├── chat_history.py        聊天记忆
+├── pet_state.py           饱腹/活力状态机
+├── prompts.py             System Prompt
+├── reminder.py            提醒系统
+└── skill_system/
+    ├── loader.py           SKILL.md 解析 + 动态加载
+    └── manager.py          技能注册/构建 tools/执行路由
+ai/                        AI API 层
+├── client.py              多厂商 AI 客户端
+└── providers.py           厂商预设 + 配置读写
+ui/                        表现层
+├── pet_window.py          主窗口 + 生命周期 + 事件
+├── pet_sprite.py          精灵图片加载与缓存
+├── input_bar.py           聊天输入条
+├── animations.py          动画系统
+├── bubble.py              对话气泡
+├── status_bar.py          状态进度条
+└── dialogs.py             设置对话框
+utils/
+├── paths.py               资源/数据路径
+└── tk_ext.py              Tkinter Canvas 圆角
+resources/images/          图片素材（4张PNG）
+skills/                    技能目录
 ```
 
 ---
@@ -184,7 +195,7 @@ src/
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --windowed --icon=icon.ico --add-data "pic;pic" main.py
+pyinstaller --onefile --windowed --icon=icon.ico --add-data "resources/images;resources/images" main.py
 ```
 
 > 打包产物约 38MB，内含 Python 运行时 + 依赖 + 图片素材。

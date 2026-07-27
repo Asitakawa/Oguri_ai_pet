@@ -1,9 +1,6 @@
-"""
-动画系统 Mixin
-提供摇晃、弹跳、惯性、吃东西、打盹、歪头等动画
-"""
+"""动画系统 Mixin"""
 import math
-from . import config as cfg
+from core import config as cfg
 
 
 class AnimationMixin:
@@ -13,23 +10,27 @@ class AnimationMixin:
         self.bounce_animation = False
         self.inertia_active = False
 
-    # ========== 惯性 ==========
     def apply_inertia(self):
         if not self.inertia_active or self.is_dragging:
             return
-        self.velocity_x *= cfg.INERTIA_FRICTION
-        self.velocity_y *= cfg.INERTIA_FRICTION
-        new_x = max(0, min(self.x + self.velocity_x, self.screen_w - self.pet_size[0]))
-        new_y = max(0, min(self.y + self.velocity_y, self.screen_h - self.pet_size[1]))
-        self.x, self.y = new_x, new_y
-        self._move()
-        if abs(self.velocity_x) > 0.3 or abs(self.velocity_y) > 0.3:
-            self.root.after(max(15, int(30 / (abs(self.velocity_x) + abs(self.velocity_y) + 1))),
-                           self.apply_inertia)
-        else:
+        self.velocity_x *= 0.88
+        self.velocity_y *= 0.88
+        speed = math.sqrt(self.velocity_x ** 2 + self.velocity_y ** 2)
+        if speed < 1.0:
             self.inertia_active = False
+            return
+        nx = self.x + self.velocity_x
+        ny = self.y + self.velocity_y
+        if nx < 0 or nx > self.screen_w - self.pet_size[0]:
+            self.velocity_x *= -0.3
+            nx = max(0, min(self.screen_w - self.pet_size[0], nx))
+        if ny < 0 or ny > self.screen_h - self.pet_size[1]:
+            self.velocity_y *= -0.3
+            ny = max(0, min(self.screen_h - self.pet_size[1], ny))
+        self.x, self.y = nx, ny
+        self._move()
+        self.root.after(16, self.apply_inertia)
 
-    # ========== 摇晃 ==========
     def start_shake_animation(self):
         if self.shake_animation:
             return
@@ -51,7 +52,6 @@ class AnimationMixin:
             self.x = self._ori_x
             self._move()
 
-    # ========== 弹跳 ==========
     def start_bounce_animation(self):
         if self.bounce_animation:
             return
@@ -81,7 +81,6 @@ class AnimationMixin:
         if hasattr(self, 'status_bar') and self.status_bar and self.status_bar.visible:
             self.status_bar._position()
 
-    # ========== 小动作 ==========
     def eat_action(self, callback=None):
         self.stop_all_animations()
         x0, y0 = self.x, self.y
@@ -114,7 +113,9 @@ class AnimationMixin:
                 return
             p = step / 8.0
             s = 1 - p * 0.15
-            self.root.geometry(f"{int(w0 * s)}x{int(h0 * s)}+{int(x0 + w0 * (1 - s) / 2)}+{int(y0 + h0 * (1 - s))}")
+            self.root.geometry(
+                f"{int(w0 * s)}x{int(h0 * s)}+{int(x0 + w0 * (1 - s) / 2)}+{int(y0 + h0 * (1 - s))}"
+            )
             self.bubble.update_position()
             self.root.after(40, lambda s=step: shrink(s + 1))
 
@@ -128,7 +129,9 @@ class AnimationMixin:
                 return
             p = step / 8.0
             s = 0.85 + p * 0.15
-            self.root.geometry(f"{int(w0 * s)}x{int(h0 * s)}+{int(x0 + w0 * (1 - s) / 2)}+{int(y0 + h0 * (1 - s))}")
+            self.root.geometry(
+                f"{int(w0 * s)}x{int(h0 * s)}+{int(x0 + w0 * (1 - s) / 2)}+{int(y0 + h0 * (1 - s))}"
+            )
             self.bubble.update_position()
             self.root.after(40, lambda s=step: expand(s + 1))
 
