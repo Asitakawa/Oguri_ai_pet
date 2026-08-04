@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
 data/
 .env
 ui_backup/
@@ -8,4 +10,5 @@ ui_backup/
 build/
 dist/
 *.spec
+!main.spec
 *.exe
