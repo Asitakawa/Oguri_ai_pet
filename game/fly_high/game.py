@@ -113,7 +113,7 @@ class FlyHighGame:
 
         self.pet.x, self.pet.y = nx, ny
         self.pet._move()
-        self.pet._set_pet_image("touch")
+        self.pet._set_pet_image("click")
 
         height = max(0, self._ground_y - self.pet.y)
         self._height = height
