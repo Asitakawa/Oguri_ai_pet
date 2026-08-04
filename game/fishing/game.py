@@ -59,8 +59,10 @@ class FishingGame(BaseGame):
     # ── 覆盖层 ────────────────────────────
     def _create_overlay(self) -> None:
         w, h = 360, 520
-        x = max(0, (self.pet.screen_w - w) // 2)
-        y = max(0, (self.pet.screen_h - h) // 2)
+        x = int(self.pet.x + self.pet.pet_size[0] // 2 - w // 2)
+        x = max(0, min(x, self.pet.screen_w - w))
+        y = int(self.pet.y) - h - 20  # 浮在桌宠上方，避免遮挡桌宠
+        y = max(0, y)
         win = tk.Toplevel(self.pet.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
@@ -92,7 +94,9 @@ class FishingGame(BaseGame):
         self._round_elapsed = 0.0
         self._draw_static()
         self._update_counter(f"第 {self._round_no}/{FishingRules.TOTAL_ROUNDS} 回合  {self._points} 分")
-        self._schedule(int(FishingRules.ROUND_SECONDS * 1000), self._on_timeout)
+        round_no = self._round_no
+        self._schedule(int(FishingRules.ROUND_SECONDS * 1000),
+                       lambda r=round_no: self._on_timeout(r))
         self._schedule(self.FRAME_MS, self._animate)
 
     def _animate(self) -> None:
@@ -133,8 +137,8 @@ class FishingGame(BaseGame):
         else:
             self._schedule(int(FishingRules.RESULT_SECONDS * 1000), self._next_round)
 
-    def _on_timeout(self) -> None:
-        if not self._active or self._phase != "float":
+    def _on_timeout(self, round_no: int) -> None:
+        if not self._active or round_no != self._round_no or self._phase != "float":
             return
         self._counts["miss"] += 1
         self._talk(random.choice(_TIMEOUT_TEXTS), 1500)

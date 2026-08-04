@@ -40,7 +40,7 @@ class DashRunGame(BaseGame):
     def start(self) -> None:
         super().start()
         pet_h = self.pet.pet_size[1]
-        self._ground_line = float(self.pet.screen_h)
+        self._ground_line = float(self.pet.screen_h) - 60  # 保留任务栏间距
         self._fixed_x = int(self.pet.screen_w * 0.22)
         self.pet.x = self._fixed_x
         self.pet.y = self._ground_line - pet_h
@@ -54,7 +54,7 @@ class DashRunGame(BaseGame):
         self._hitting = False
         self._spawn_countdown = random.randint(DashRules.SPAWN_MIN_FRAMES,
                                                DashRules.SPAWN_MAX_FRAMES)
-        self._bind(self.pet.label, "<Button-1>", self._on_jump)
+        self._bind_all("<Button-1>", self._on_jump)
         self._bind_all("<KeyPress-space>", self._on_jump)
         self._create_overlay()
         self._schedule(self.FRAME_MS, self._update)
@@ -82,6 +82,12 @@ class DashRunGame(BaseGame):
         self._canvas = canvas
         if self._counter_win:
             self._counter_win.lift()
+        canvas.bind("<Button-3>", self._on_menu)
+
+    def _on_menu(self, event) -> None:
+        show = getattr(self.pet, "_show_menu", None)
+        if show:
+            show(event)
 
     def _destroy_overlay(self) -> None:
         if self._overlay:

@@ -85,11 +85,11 @@ class EatingRushGame(BaseGame):
             self.pet.eat_action()
         self._render()
         if self._bite_count % 5 == 0 and self._bite_count in _MILESTONE_TEXTS:
-            self._talk(_MILESTONE_TEXTS[self._bite_count], 1200)
-        if self._boost:
-            self._talk(random.choice(_BOOST_TEXTS), 1000)
+            self._maybe_talk(_MILESTONE_TEXTS[self._bite_count], 1200)
+        elif self._boost:
+            self._maybe_talk(random.choice(_BOOST_TEXTS), 1000)
         elif random.random() < 0.2:
-            self._talk(random.choice(_BITE_TEXTS), 1000)
+            self._maybe_talk(random.choice(_BITE_TEXTS), 1000)
         if self.food_left <= 0:
             self._finish_win()
 

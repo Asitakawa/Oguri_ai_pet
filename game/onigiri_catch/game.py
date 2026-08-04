@@ -60,8 +60,9 @@ class OnigiriCatchGame(BaseGame):
         self._speed_mult = 1.0
         self._interval = CatchRules.BASE_INTERVAL
         self._phase = 0
-        # 桌宠放到底部中央
-        self.pet.y = self.pet.screen_h - self.pet.pet_size[1]
+        # 桌宠放到底部中央（保留任务栏间距）
+        margin = 60
+        self.pet.y = self.pet.screen_h - self.pet.pet_size[1] - margin
         self.pet.x = max(0, (self.pet.screen_w - self.pet.pet_size[0]) // 2)
         self.pet._move()
         self._create_overlay()
@@ -91,6 +92,13 @@ class OnigiriCatchGame(BaseGame):
         self._canvas = canvas
         if self._counter_win:
             self._counter_win.lift()
+        self._make_click_through(win)
+        canvas.bind("<Button-3>", self._on_menu)
+
+    def _on_menu(self, event) -> None:
+        show = getattr(self.pet, "_show_menu", None)
+        if show:
+            show(event)
 
     def _destroy_overlay(self) -> None:
         if self._overlay:
@@ -176,7 +184,8 @@ class OnigiriCatchGame(BaseGame):
         self.pet._set_pet_image("click", auto_reset=300)
         if item["kind"] != "bad":
             self.pet.eat_action()
-        self._talk(random.choice(_CATCH_TEXTS.get(item["kind"], ["啊呜！"])), 1500)
+        if item["kind"] == "bad" or item["value"] >= 2 or self.combo % 2 == 1:
+            self._maybe_talk(random.choice(_CATCH_TEXTS.get(item["kind"], ["啊呜！"])), 1500)
         if self.combo in (5, 10, 15):
             self._talk(_COMBO_TEXTS[self.combo // 5 - 1], 1800)
 
@@ -184,4 +193,4 @@ class OnigiriCatchGame(BaseGame):
         self.missed += 1
         self.combo = 0
         if self.missed in (1, 3, 6):
-            self._talk(_MISS_TEXTS[0 if self.missed == 1 else 1], 1500)
+            self._maybe_talk(_MISS_TEXTS[0 if self.missed == 1 else 1], 1500)

@@ -1,6 +1,7 @@
 """小游戏公共基类 — 统一生命周期、事件、计数器与气泡管理"""
 from __future__ import annotations
 
+import time
 import tkinter as tk
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -47,6 +48,7 @@ class BaseGame:
         self._counter_label: Optional[tk.Label] = None
         self._counter_anchor: Optional[Tuple[int, int]] = None
         self._counter_drag_off = None
+        self._last_talk = 0.0
 
     # ── 生命周期 ──────────────────────────
     def start(self) -> None:
@@ -56,6 +58,7 @@ class BaseGame:
         self._disable_pet_interactions()
         self._create_counter()
         self._talk(self.RULE_TEXT, 3000)
+        self._bind_all("<KeyPress-Escape>", self._exit_game)
 
     def stop(self) -> None:
         self._active = False
@@ -144,6 +147,41 @@ class BaseGame:
     def _talk(self, text: str, duration: int = 4000) -> None:
         self.pet.show_talk(text)
         self._schedule(duration, self.pet.hide_talk)
+
+    def _maybe_talk(self, text: str, duration: int = 1500,
+                    min_interval: float = 0.8) -> None:
+        """带冷却的气泡播报，避免高频刷新刷屏。"""
+        now = time.time()
+        if now - self._last_talk >= min_interval:
+            self._last_talk = now
+            self._talk(text, duration)
+
+    def _exit_game(self, event=None) -> None:
+        gm = getattr(self.pet, "game_manager", None)
+        if gm is not None and getattr(gm, "_active", None) is self:
+            gm.stop()
+
+    @staticmethod
+    def _make_click_through(win: tk.Toplevel) -> None:
+        """让窗口对鼠标事件穿透（仅 Windows；失败时静默降级）。"""
+        try:
+            import ctypes
+            GWL_EXSTYLE = -20
+            WS_EX_LAYERED = 0x00080000
+            WS_EX_TRANSPARENT = 0x00000020
+            win.update_idletasks()
+            hwnd = win.winfo_id()
+            parent = ctypes.windll.user32.GetParent(hwnd)
+            if parent:
+                hwnd = parent
+            ex = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            ctypes.windll.user32.SetWindowLongW(
+                hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED | WS_EX_TRANSPARENT)
+            ctypes.windll.user32.SetWindowPos(
+                hwnd, 0, 0, 0, 0, 0,
+                0x0001 | 0x0002 | 0x0004 | 0x0020)  # NOMOVE|NOSIZE|NOZORDER|FRAMECHANGED
+        except Exception as e:
+            log.debug("设置点击穿透失败: %s", e)
 
     # ── 计数器窗口（可拖动） ────────────────
     def _create_counter(self) -> None:
