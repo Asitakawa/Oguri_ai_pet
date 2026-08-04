@@ -1,6 +1,7 @@
 """Backend: 天气查询"""
-import requests
 import time
+
+import requests
 
 _UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
