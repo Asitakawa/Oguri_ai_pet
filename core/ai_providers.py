@@ -1,14 +1,19 @@
 """API 厂商预设"""
+from __future__ import annotations
+
 import base64
 import os
+from typing import Dict, List, Optional, Tuple
+
 import requests
 from dotenv import load_dotenv
+
 from core import config as cfg
 from core.paths import get_data_path
 
 _ENV_PATH = get_data_path(cfg.API_SETTINGS_FILE)
 
-PROVIDERS = {
+PROVIDERS: Dict[str, Dict[str, object]] = {
     "volcengine": {
         "name": "火山引擎(豆包)",
         "chat_url": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
@@ -42,36 +47,36 @@ PROVIDERS = {
 }
 
 
-def get_provider(key):
+def get_provider(key: str) -> Optional[Dict[str, object]]:
     return PROVIDERS.get(key)
 
 
-def get_provider_list():
-    return [(k, v["name"]) for k, v in PROVIDERS.items()]
+def get_provider_list() -> List[Tuple[str, str]]:
+    return [(k, v["name"]) for k, v in PROVIDERS.items()]  # type: ignore[arg-type]
 
 
-def get_models(key):
+def get_models(key: str) -> List[str]:
     p = PROVIDERS.get(key)
-    return p["models"] if p else []
+    return p["models"] if p else []  # type: ignore[return-value]
 
 
-def get_chat_url(key):
+def get_chat_url(key: str) -> str:
     p = PROVIDERS.get(key)
-    return p["chat_url"] if p else ""
+    return p["chat_url"] if p else ""  # type: ignore[return-value]
 
 
-def _obfuscate(key):
+def _obfuscate(key: str) -> str:
     return base64.b64encode(key.encode()).decode()
 
 
-def _deobfuscate(encoded):
+def _deobfuscate(encoded: str) -> str:
     try:
         return base64.b64decode(encoded.encode()).decode()
     except Exception:
         return encoded
 
 
-def load_api_settings():
+def load_api_settings() -> Dict[str, str]:
     load_dotenv(_ENV_PATH, override=True)
     raw_key = os.getenv(cfg.API_KEY_KEY, "")
     return {
@@ -81,13 +86,13 @@ def load_api_settings():
     }
 
 
-def save_api_settings(provider, model, api_key):
+def save_api_settings(provider: str, model: str, api_key: str) -> None:
     lines = []
     if os.path.exists(_ENV_PATH):
         with open(_ENV_PATH, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
-    def _set(key, value):
+    def _set(key: str, value: str) -> None:
         found = False
         for i, line in enumerate(lines):
             if line.startswith(key + "=") or line.startswith(key + " ="):
@@ -105,7 +110,7 @@ def save_api_settings(provider, model, api_key):
         f.writelines(lines)
 
 
-def test_connection(provider, api_key, model):
+def test_connection(provider: str, api_key: str, model: str) -> Tuple[bool, str]:
     url = get_chat_url(provider)
     if not url:
         return False, "未知厂商"

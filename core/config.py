@@ -217,8 +217,12 @@ TIRED_TALK_TEXTS = [
 ]
 
 # ── 持久化设置 ──────────────────────────────
-import json
-from core.paths import get_data_path
+import json  # noqa: E402
+
+from core.paths import get_data_path  # noqa: E402
+from utils.logger import get_logger  # noqa: E402
+
+log = get_logger("config")
 
 _SETTINGS_FILE = get_data_path("settings.json")
 
@@ -237,7 +241,7 @@ def _save():
                 "preset_max_interval": PRESET_MAX_INTERVAL,
             }, f, ensure_ascii=False, indent=2)
     except IOError as e:
-        print(f"设置保存失败: {e}")
+        log.warning("设置保存失败: %s", e)
 
 
 def _load():

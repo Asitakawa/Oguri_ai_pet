@@ -1,10 +1,16 @@
 """安排表系统"""
+from __future__ import annotations
+
 import json
 import threading
 import time
 import uuid
 from datetime import datetime, timedelta
-from utils.paths import get_data_path
+
+from core.paths import get_data_path
+from utils.logger import get_logger
+
+log = get_logger("reminder")
 
 DATA_FILE = get_data_path("reminders.json")
 CHECK_INTERVAL = 30
@@ -38,9 +44,12 @@ class ScheduleItem:
             return f"每天{self.hour:02d}:{self.minute:02d}"
         if t == "weekly":
             ds = self.days or []
-            if ds == [0,1,2,3,4]: label = "工作日"
-            elif ds == [5,6]: label = "周末"
-            else: label = "、".join(_WDAY[d] for d in ds)
+            if ds == [0, 1, 2, 3, 4]:
+                label = "工作日"
+            elif ds == [5, 6]:
+                label = "周末"
+            else:
+                label = "、".join(_WDAY[d] for d in ds)
             return f"每{label}{self.hour:02d}:{self.minute:02d}"
         return f"{self.hour:02d}:{self.minute:02d}"
 
@@ -78,7 +87,7 @@ class ScheduleManager:
             with open(DATA_FILE, "w", encoding="utf-8") as f:
                 json.dump(snap, f, ensure_ascii=False, indent=2)
         except IOError as e:
-            print(f"安排表保存失败: {e}")
+            log.warning("安排表保存失败: %s", e)
 
     def add(self, schedule_type, hour, minute, title, days=None, tag=""):
         it = ScheduleItem(id=str(uuid.uuid4())[:8], title=title,
@@ -180,10 +189,14 @@ class ScheduleManager:
             elif it.type in ("once", "delayed"):
                 dt = datetime.fromisoformat(it.trigger_at).date() if it.trigger_at else today
                 diff = (dt - today).days
-                if diff == 0: groups["今天"].append(it)
-                elif diff == 1: groups["明天"].append(it)
-                elif 1 < diff < 7: groups["本周"].append(it)
-                else: groups["更早"].append(it)
+                if diff == 0:
+                    groups["今天"].append(it)
+                elif diff == 1:
+                    groups["明天"].append(it)
+                elif 1 < diff < 7:
+                    groups["本周"].append(it)
+                else:
+                    groups["更早"].append(it)
         lines = []
         for label in ("今天", "明天", "本周", "更早"):
             its = groups[label]
@@ -227,10 +240,10 @@ class ScheduleManager:
                     if self._should_fire(it, now):
                         self._fire(it)
             except Exception as e:
-                print(f"调度异常: {e}")
+                log.warning("调度异常: %s", e)
             time.sleep(CHECK_INTERVAL)
 
-    def _should_fire(self, it, now):
+    def _should_fire(self, it: "ScheduleItem", now) -> bool:
         if it.trigger_at:
             if now >= datetime.fromisoformat(it.trigger_at):
                 return True

@@ -1,10 +1,17 @@
 """SKILL.md 解析 + scripts/ 动态加载"""
+from __future__ import annotations
+
 import importlib.util
 import os
 import sys
+from typing import Callable, Dict, List, Optional, Tuple
+
+from utils.logger import get_logger
+
+log = get_logger("skill_loader")
 
 
-def parse_frontmatter(text):
+def parse_frontmatter(text: str) -> Tuple[Dict[str, str], str]:
     if not text.startswith("---"):
         return {}, text
     lines = text.split("\n")
@@ -15,7 +22,7 @@ def parse_frontmatter(text):
             break
     if end is None:
         return {}, text
-    data = {}
+    data: Dict[str, str] = {}
     ck = None
     cv = []
     ml = False
@@ -24,7 +31,7 @@ def parse_frontmatter(text):
             if line and line[0] in (" ", "\t"):
                 cv.append(line.strip())
                 continue
-            data[ck] = "\n".join(cv)
+            data[ck] = "\n".join(cv)  # type: ignore[index]
             ml = False
         if ":" not in line:
             continue
@@ -38,12 +45,12 @@ def parse_frontmatter(text):
         elif v:
             data[k] = v
     if ml:
-        data[ck] = "\n".join(cv)
+        data[ck] = "\n".join(cv)  # type: ignore[index]
     return data, "\n".join(lines[end + 1:])
 
 
-def parse_parameters(frontmatter, body):
-    params = []
+def parse_parameters(frontmatter: Dict[str, str], body: str) -> List[dict]:
+    params: List[dict] = []
     if "parameters" in frontmatter:
         raw = frontmatter["parameters"]
         if isinstance(raw, list):
@@ -67,7 +74,7 @@ def parse_parameters(frontmatter, body):
     return params
 
 
-def load_scripts(skill_dir, mod_name):
+def load_scripts(skill_dir: str, mod_name: str) -> Optional[Callable]:
     """加载技能目录下的 scripts/ 中的 Python 文件，返回 execute 函数"""
     scripts_dir = os.path.join(skill_dir, "scripts")
     if not os.path.isdir(scripts_dir):
@@ -87,5 +94,5 @@ def load_scripts(skill_dir, mod_name):
                 if execute:
                     return execute
             except Exception as e:
-                print(f"技能脚本加载失败 {fname}: {e}")
+                log.warning("技能脚本加载失败 %s: %s", fname, e)
     return None
