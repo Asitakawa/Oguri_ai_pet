@@ -1,4 +1,6 @@
 """技能管理器"""
+from __future__ import annotations
+
 import importlib.util
 import inspect
 import json
@@ -8,8 +10,11 @@ import sys
 import threading
 import zipfile
 
-from core.paths import get_resource_path, get_data_path
-from core.skill_system.loader import parse_frontmatter, parse_parameters, load_scripts
+from core.paths import get_data_path, get_resource_path
+from core.skill_system.loader import load_scripts, parse_frontmatter, parse_parameters
+from utils.logger import get_logger
+
+log = get_logger("skill_manager")
 
 SKILLS_DIR = get_resource_path("skills")
 CONFIG_PATH = get_data_path("skills_config.json")
@@ -18,7 +23,7 @@ _TYPE_MAP = {int: "integer", float: "number", bool: "boolean", str: "string"}
 
 
 class SkillManager:
-    def __init__(self, pet):
+    def __init__(self, pet) -> None:
         self.pet = pet
         self._lock = threading.Lock()
         self._skills = {}
@@ -39,7 +44,7 @@ class SkillManager:
             with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                 json.dump(self._config, f, ensure_ascii=False, indent=2)
         except IOError as e:
-            print(f"技能配置保存失败: {e}")
+            log.warning("技能配置保存失败: %s", e)
 
     def _load_all(self):
         with self._lock:
@@ -63,6 +68,13 @@ class SkillManager:
         desc = fm.get("description", "")
         params = parse_parameters(fm, body)
         execute_fn = load_scripts(skill_dir, f"skill_{name}")
+        with self._lock:
+            if name in self._skills:
+                log.warning("跳过技能 %s（目录 %s）：与已有技能重名", name, dirname)
+                return
+        if execute_fn is None:
+            log.warning("跳过技能 %s（目录 %s）：缺少可执行的 execute 实现", name, dirname)
+            return
         with self._lock:
             self._skills[name] = {
                 "name": name,
@@ -127,8 +139,7 @@ class SkillManager:
             result = sk["execute_fn"](**filtered)
             return str(result) if result is not None else ""
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            log.exception("技能执行错误: %s", e)
             return f"技能执行错误: {e}"
 
     def list_skills(self):
@@ -153,7 +164,7 @@ class SkillManager:
             self._save_config()
             return True
         except OSError as e:
-            print(f"删除技能失败: {e}")
+            log.warning("删除技能失败: %s", e)
             return False
 
     def add_skill_zip(self, zip_path):
