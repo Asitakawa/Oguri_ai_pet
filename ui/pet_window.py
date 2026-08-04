@@ -1,14 +1,29 @@
 """小栗帽桌面宠物 — 主窗口 + 生命周期 + 事件路由"""
-import tkinter as tk
-from tkinter import Menu, messagebox
-import math
-import random
-import time
-import threading
-import os
 import gc
+import math
+import os
+import random
 import subprocess
 import sys
+import threading
+import time
+import tkinter as tk
+from tkinter import Menu, messagebox
+
+from core import config as cfg
+from core.ai_client import AIClient
+from core.chat_history import ChatHistoryManager
+from core.paths import get_data_path, get_resource_path
+from core.pet_state import PetStatus
+from core.reminder import ScheduleManager
+from core.skill_system.manager import SkillManager
+from game import GameManager
+from ui.animations import AnimationMixin
+from ui.bubble import ChatBubble
+from ui.dialogs import UIDialogs
+from ui.input_bar import InputBar
+from ui.pet_sprite import PetSprite
+from ui.status_bar import StatusBar
 
 
 def _load_psutil():
@@ -16,21 +31,6 @@ def _load_psutil():
         return __import__("psutil")
     except ImportError:
         return None
-
-from core import config as cfg
-from core.paths import get_resource_path, get_data_path
-from core.chat_history import ChatHistoryManager
-from ui.bubble import ChatBubble
-from ui.animations import AnimationMixin
-from ui.pet_sprite import PetSprite
-from ui.input_bar import InputBar
-from ui.status_bar import StatusBar
-from ui.dialogs import UIDialogs
-from core.ai_client import AIClient
-from core.pet_state import PetStatus
-from core.reminder import ScheduleManager
-from core.skill_system.manager import SkillManager
-
 
 class KurumiPet(AnimationMixin):
     def __init__(self):
@@ -42,6 +42,7 @@ class KurumiPet(AnimationMixin):
         self.dialogs = UIDialogs(self)
         self.schedule_manager = ScheduleManager(self)
         self.skill_manager = SkillManager(self)
+        self.game_manager = GameManager(self)
         self.sprite = PetSprite(self)
         self.input_bar = InputBar(self)
         self.status = PetStatus()
@@ -146,6 +147,11 @@ class KurumiPet(AnimationMixin):
         self._build_menu()
 
     def _build_menu(self):
+        if self.menu:
+            try:
+                self.menu.destroy()
+            except Exception:
+                pass
         m = self.menu = Menu(self.root, tearoff=0, font=(cfg.FONT_FAMILY, 10),
                              bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
                              activeforeground=cfg.C_WOOD, relief='flat', bd=0)
@@ -172,11 +178,32 @@ class KurumiPet(AnimationMixin):
         sub.add_command(label="⚙ 系统设置", command=self.dialogs.show_settings)
         m.add_cascade(label="⚙ 设置", menu=sub)
 
+        # 小游戏子菜单
+        gsub = Menu(m, tearoff=0, font=(cfg.FONT_FAMILY, 10),
+                    bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
+                    activeforeground=cfg.C_WOOD, relief='flat', bd=0)
+        gsub.add_command(label="🎮 游戏管理", command=self.dialogs.show_game_manager)
+        enabled = self.game_manager.list_enabled()
+        if enabled:
+            gsub.add_separator()
+            for key, gname in enabled:
+                gsub.add_command(label=gname, command=lambda k=key: self._toggle_game(k))
+        if self.game_manager.is_active():
+            gsub.add_separator()
+            gsub.add_command(label="⏹ 退出游戏", command=self.game_manager.stop)
+        m.add_cascade(label="🎮 小游戏", menu=gsub)
+
         m.add_separator()
         m.add_command(label="🔄 重启", command=self.restart)
         m.add_command(label="🚪 退出", command=self.quit)
 
+    def _toggle_game(self, key):
+        if self.game_manager.is_active():
+            self.game_manager.stop()
+        self.game_manager.start(key)
+
     def _show_menu(self, e):
+        self._build_menu()
         self.menu.post(e.x_root, e.y_root)
 
     def _activate_status_callbacks(self):
@@ -417,7 +444,7 @@ class KurumiPet(AnimationMixin):
             except Exception:
                 pass
 
-        print(f"预设自动回复线程已启动, 初始问候等待10-20秒...")
+        print("预设自动回复线程已启动, 初始问候等待10-20秒...")
         self._sleep_chunk(random.randint(10, 20))
         if self.running:
             self.is_auto_talking = True
@@ -564,7 +591,11 @@ class KurumiPet(AnimationMixin):
         self.chat_history.save(sync=True)
         self.schedule_manager.stop()
         self.status.stop()
-        subprocess.Popen([sys.executable, "main.py"])
+        args = [sys.executable]
+        if not getattr(sys, "frozen", False):
+            args.append(os.path.abspath("main.py"))
+        args.append("--restart")
+        subprocess.Popen(args)
         self.root.destroy()
 
     # ── 退出 ──────────────────────────────────
