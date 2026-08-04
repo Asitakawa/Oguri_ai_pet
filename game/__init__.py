@@ -5,7 +5,12 @@ import json
 from typing import Dict, List, Tuple
 
 from core.paths import get_data_path
+from game.base import BaseGame  # noqa: F401
+from game.dash_run.game import DashRunGame
+from game.eating_rush.game import EatingRushGame
+from game.fishing.game import FishingGame
 from game.fly_high.game import FlyHighGame
+from game.onigiri_catch.game import OnigiriCatchGame
 from utils.logger import get_logger
 
 log = get_logger("game")
@@ -14,6 +19,10 @@ log = get_logger("game")
 # 游戏注册表：key -> (名称, 游戏类)
 GAMES: Dict[str, Dict[str, object]] = {
     "fly_high": {"name": "一飞冲天", "desc": "用力把我抛起来吧！", "cls": FlyHighGame},
+    "onigiri_catch": {"name": "接饭团", "desc": "移动桌宠接住掉落的饭团", "cls": OnigiriCatchGame},
+    "eating_rush": {"name": "大胃王速吃", "desc": "限时狂点吃完一碗饭", "cls": EatingRushGame},
+    "dash_run": {"name": "冲刺障碍跑", "desc": "跳跃躲避障碍，跑得越远越好", "cls": DashRunGame},
+    "fishing": {"name": "钓鱼时机", "desc": "在浮标进入区间时点击提竿", "cls": FishingGame},
 }
 
 
