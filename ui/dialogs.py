@@ -1,17 +1,20 @@
 """UI 对话框"""
-import tkinter as tk
-import tkinter.font as tkfont
-from tkinter import scrolledtext, filedialog, messagebox
+import os
 import threading
 import time
-import os
+import tkinter as tk
+import tkinter.font as tkfont
+from tkinter import filedialog, messagebox, scrolledtext
 
 from core import config as cfg
 from core.ai_providers import (
-    load_api_settings, save_api_settings, test_connection,
-    get_provider_list, get_models, get_provider,
+    get_models,
+    get_provider,
+    get_provider_list,
+    load_api_settings,
+    save_api_settings,
+    test_connection,
 )
-
 
 _FONT = ('Microsoft YaHei', 10)
 _FONT_BOLD = ('Microsoft YaHei', 10, 'bold')
@@ -545,3 +548,40 @@ class UIDialogs:
         else:
             messagebox.showerror("添加失败", msg)
         refresh_cb()
+
+    # ── 游戏管理 ──────────────────────────────
+    def show_game_manager(self):
+        p = self.pet
+        win = self._window(p, "游戏管理", 380, 280)
+        _title_bar(win, "🎮  游戏管理")
+
+        if p.game_manager.is_active():
+            act = p.game_manager._active
+            tk.Label(win, text=f"正在游玩：{act.NAME}",
+                     font=_FONT_BOLD, bg=cfg.C_BG,
+                     fg=cfg.C_MINT_DEEP).pack(pady=(12, 4))
+
+        lf = tk.Frame(win, bg=cfg.C_BG)
+        lf.pack(fill='both', expand=True, padx=16, pady=6)
+
+        for key, gname, enabled in p.game_manager.list_all():
+            row = tk.Frame(lf, bg=cfg.C_BG, bd=0)
+            row.pack(fill='x', pady=3)
+            var = tk.BooleanVar(value=enabled)
+            def toggle(k=key, v=var):
+                p.game_manager.set_enabled(k, v.get())
+            tk.Checkbutton(row, variable=var, command=toggle,
+                           bg=cfg.C_BG, activebackground=cfg.C_BG,
+                           highlightthickness=0).pack(side='left')
+            tk.Label(row, text=gname, font=_FONT_BOLD, bg=cfg.C_BG,
+                     fg=cfg.C_TEXT).pack(side='left', padx=(4, 0))
+            tk.Frame(lf, height=1, bg=cfg.C_ASH_LIGHT).pack(fill='x', padx=4)
+
+        bf = tk.Frame(win, bg=cfg.C_BG)
+        bf.pack(pady=(10, 0))
+        if p.game_manager.is_active():
+            _btn(bf, "⏹ 退出游戏", cfg.C_ROSE,
+                 command=lambda: (p.game_manager.stop(), win.destroy()),
+                 ).pack(side='left', padx=4)
+        _btn(bf, "✕ 关闭", cfg.C_ASH,
+             command=win.destroy).pack(side='left', padx=4)

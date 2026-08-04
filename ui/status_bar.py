@@ -1,5 +1,6 @@
 """悬浮进度条"""
 import tkinter as tk
+
 from core import config as cfg
 
 

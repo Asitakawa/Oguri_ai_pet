@@ -1,6 +1,7 @@
 """聊天输入条"""
 import threading
 import tkinter as tk
+
 from core import config as cfg
 
 

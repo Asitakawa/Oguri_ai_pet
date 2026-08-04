@@ -1,6 +1,7 @@
 """桌宠精灵 — 图片加载与显示"""
 import os
-from PIL import Image, ImageTk, ImageEnhance
+
+from PIL import Image, ImageEnhance, ImageTk
 
 
 class PetSprite:

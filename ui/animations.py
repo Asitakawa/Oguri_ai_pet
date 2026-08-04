@@ -1,6 +1,5 @@
 """动画系统 Mixin"""
 import math
-from core import config as cfg
 
 
 class AnimationMixin:

@@ -1,5 +1,6 @@
 """漫画对话气泡"""
 import tkinter as tk
+
 from core import config as cfg
 
 
@@ -27,7 +28,7 @@ class ChatBubble:
     def update_position(self, force=False):
         px, py = self.pet.x, self.pet.y
         pw, ph = self.pet.pet_size
-        sw, sh = self.pet.screen_w, self.pet.screen_h
+        sw = self.pet.screen_w
         bx = max(0, min(px + (pw - self.bw) // 2, sw - self.bw))
         by = max(0, py - self.bh - 10)
         self.win.geometry(f"{self.bw}x{self.bh}+{int(bx)}+{int(by)}")
