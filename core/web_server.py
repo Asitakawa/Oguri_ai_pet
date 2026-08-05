@@ -13,19 +13,31 @@ import secrets
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
+from core import config as cfg
+from core.ai_providers import (
+    get_models,
+    get_provider_list,
+    load_api_settings,
+    save_api_settings,
+    test_connection,
+)
 from core.paths import get_resource_path
 from utils.logger import get_logger
 
 log = get_logger("web_server")
 
 DEFAULT_POLL_INTERVAL = 5.0
+FONT_FALLBACK = [
+    "Microsoft YaHei", "SimSun", "SimHei", "KaiTi", "FangSong",
+    "DengXian", "NSimSun", "YouYuan", "Microsoft JhengHei",
+]
 
 
 class ManagementServer:
-    """管理面板本地服务。pet 需提供 status / chat_history / skill_manager 等属性。"""
+    """管理面板本地服务。pet 需提供 status / chat_history / skill_manager / ai 等属性。"""
 
     def __init__(
         self,
@@ -125,6 +137,111 @@ class ManagementServer:
             pass
         return payload
 
+    def _settings_payload(self) -> Dict[str, Any]:
+        p = self.pet
+        api = load_api_settings()
+        providers = [
+            {"key": k, "name": n, "models": get_models(k)}
+            for k, n in get_provider_list()
+        ]
+        return {
+            "api": {
+                "provider": api["provider"],
+                "model": api["model"],
+                "keyConfigured": bool(api["api_key"] and len(api["api_key"]) > 10),
+                "providers": providers,
+                "models": get_models(api["provider"]),
+            },
+            "system": {
+                "minAutoReply": int(getattr(p, "min_auto_reply_time", cfg.MIN_AUTO_REPLY)),
+                "maxAutoReply": int(getattr(p, "max_auto_reply_time", cfg.MAX_AUTO_REPLY)),
+                "presetMin": int(getattr(p, "preset_min_interval", cfg.PRESET_MIN_INTERVAL)),
+                "presetMax": int(getattr(p, "preset_max_interval", cfg.PRESET_MAX_INTERVAL)),
+                "memoryRounds": cfg.MEMORY_CONTEXT_SIZE // 2,
+            },
+            "font": {
+                "family": cfg.FONT_FAMILY,
+                "size": cfg.FONT_SIZE,
+                "sizeMin": cfg.FONT_SIZE_MIN,
+                "sizeMax": cfg.FONT_SIZE_MAX,
+                "families": self._font_families(),
+            },
+            "pet": {
+                "scale": float(getattr(p, "scale_factor", 1.0)),
+                "minScale": float(getattr(p, "min_scale", cfg.MIN_SCALE)),
+                "maxScale": float(getattr(p, "max_scale", cfg.MAX_SCALE)),
+            },
+        }
+
+    def _font_families(self) -> List[str]:
+        try:
+            import tkinter.font as tkfont
+
+            root = getattr(self.pet, "root", None)
+            fams = set(tkfont.families(root) if root is not None else FONT_FALLBACK)
+            extra = [
+                f for f in fams
+                if any(k in f.lower() for k in (
+                    "yahei", "simsun", "simhei", "kaiti", "fangsong", "dengxian",
+                    "noto", "sarasa", "han", "cjk", "ming", "gothic", "wenquan",
+                    "puhui", "zcool", "source", "serif", "sans",
+                ))
+            ]
+            return list(dict.fromkeys(FONT_FALLBACK + sorted(extra)))
+        except Exception:
+            return list(FONT_FALLBACK)
+
+    def _chat_reply(self, text: str) -> str:
+        p = self.pet
+        ctx = p.chat_history.get_context(cfg.MEMORY_CONTEXT_SIZE)
+        text = (text or "").strip()
+        if text:
+            p.chat_history.add("user", text)
+        r, _ = p.ai.ask(
+            text or "看看屏幕",
+            False,
+            history_context=ctx,
+            tools=p.skill_manager.get_tools(),
+            execute_tool=p.skill_manager.execute,
+        )
+        p.chat_history.add("assistant", r)
+        try:
+            root = getattr(p, "root", None)
+            if root is not None and hasattr(p, "_handle_ai_response"):
+                root.after(0, lambda: p._handle_ai_response(r))
+        except Exception:
+            pass
+        return r
+
+    def _apply_system(self, data: Dict[str, Any]) -> None:
+        p = self.pet
+        mi = int(data.get("minAutoReply", getattr(p, "min_auto_reply_time", cfg.MIN_AUTO_REPLY)))
+        ma = int(data.get("maxAutoReply", getattr(p, "max_auto_reply_time", cfg.MAX_AUTO_REPLY)))
+        pr_min = int(data.get("presetMin", getattr(p, "preset_min_interval", cfg.PRESET_MIN_INTERVAL)))
+        pr_max = int(data.get("presetMax", getattr(p, "preset_max_interval", cfg.PRESET_MAX_INTERVAL)))
+        mem = int(data.get("memoryRounds", cfg.MEMORY_CONTEXT_SIZE // 2))
+        if mi > ma or pr_min > pr_max:
+            raise ValueError("最短间隔不能大于最长间隔")
+        mem = max(10, min(500, mem))
+        p.min_auto_reply_time = mi
+        p.max_auto_reply_time = ma
+        p.preset_min_interval = pr_min
+        p.preset_max_interval = pr_max
+        cfg.MIN_AUTO_REPLY = mi
+        cfg.MAX_AUTO_REPLY = ma
+        cfg.PRESET_MIN_INTERVAL = pr_min
+        cfg.PRESET_MAX_INTERVAL = pr_max
+        cfg.MEMORY_CONTEXT_SIZE = mem * 2
+        cfg._save()
+
+    def _export_text(self) -> str:
+        lines = ["小栗帽聊天记录导出", "=" * 50, ""]
+        for m in self.pet.chat_history.history:
+            who = "训练员" if m["role"] == "user" else "小栗帽"
+            lines.append(f"[{m['timestamp']}] {who}: {m['content']}")
+            lines.append("")
+        return "\n".join(lines)
+
     # ---------- HTTP ----------
     def _make_handler(self) -> type:
         server = self
@@ -138,9 +255,12 @@ class ManagementServer:
             def do_POST(self) -> None:  # noqa: N802
                 server._handle_post(self)
 
+            def do_DELETE(self) -> None:  # noqa: N802
+                server._handle_delete(self)
+
             def handle_one_request(self) -> None:
-                # ????????? SSE ???????? flush ???? wfile?
-                # ? ValueError/BrokenPipe ??????????
+                # 客户端提前断开（如 SSE 中断）后框架仍会 flush 已关闭的 wfile，
+                # 抛 ValueError/BrokenPipe 属正常情况，静默忽略
                 try:
                     super().handle_one_request()
                 except (ValueError, BrokenPipeError, ConnectionResetError,
@@ -168,19 +288,58 @@ class ManagementServer:
         handler.end_headers()
         handler.wfile.write(body)
 
+    def _send_bytes(self, handler: BaseHTTPRequestHandler, code: int, body: bytes,
+                    ctype: str, extra_headers: Optional[Dict[str, str]] = None) -> None:
+        handler.send_response(code)
+        handler.send_header("Content-Type", ctype)
+        handler.send_header("Content-Length", str(len(body)))
+        handler.send_header("Cache-Control", "no-store")
+        for k, v in (extra_headers or {}).items():
+            handler.send_header(k, v)
+        handler.end_headers()
+        handler.wfile.write(body)
+
+    def _read_json(self, handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
+        length = int(handler.headers.get("Content-Length") or 0)
+        raw = handler.rfile.read(length).decode("utf-8") if length > 0 else "{}"
+        try:
+            data = json.loads(raw or "{}")
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
     def _handle_get(self, handler: BaseHTTPRequestHandler) -> None:
-        path = urlparse(handler.path).path
-        if path == "/api/status":
+        parsed = urlparse(handler.path)
+        path = parsed.path
+        if path.startswith("/api/"):
             if not self._check_token(handler):
                 self._send_json(handler, 401, {"error": "unauthorized"})
                 return
-            self._send_json(handler, 200, self.status_payload())
-            return
-        if path == "/api/events":
-            if not self._check_token(handler):
-                self._send_json(handler, 401, {"error": "unauthorized"})
+            if path == "/api/status":
+                self._send_json(handler, 200, self.status_payload())
                 return
-            self._handle_sse(handler)
+            if path == "/api/events":
+                self._handle_sse(handler)
+                return
+            if path == "/api/history":
+                q = parse_qs(parsed.query).get("q", [""])[0].strip()
+                msgs = (self.pet.chat_history.search(q)
+                        if q else self.pet.chat_history.history)
+                self._send_json(handler, 200, {"messages": msgs[-1000:]})
+                return
+            if path == "/api/history/export":
+                ts = time.strftime("%Y%m%d_%H%M%S")
+                fname = f"chat_history_{ts}.txt"
+                self._send_bytes(
+                    handler, 200, self._export_text().encode("utf-8"),
+                    "text/plain; charset=utf-8",
+                    {"Content-Disposition": f'attachment; filename="{fname}"'},
+                )
+                return
+            if path == "/api/settings":
+                self._send_json(handler, 200, self._settings_payload())
+                return
+            self._send_json(handler, 404, {"error": "not found"})
             return
         self._serve_static(handler, path)
 
@@ -189,12 +348,12 @@ class ManagementServer:
         if not self._check_token(handler):
             self._send_json(handler, 401, {"error": "unauthorized"})
             return
-        length = int(handler.headers.get("Content-Length") or 0)
-        if length > 0:
-            handler.rfile.read(length)
+        data = self._read_json(handler)
+        p = self.pet
+
         if path == "/api/pet/feed":
             try:
-                status = getattr(self.pet, "status", None)
+                status = getattr(p, "status", None)
                 if status is None or not hasattr(status, "feed"):
                     self._send_json(handler, 500, {"error": "pet status unavailable"})
                     return
@@ -203,6 +362,105 @@ class ManagementServer:
                 self._send_json(handler, 500, {"error": str(e)})
                 return
             self._send_json(handler, 200, self.status_payload())
+            return
+
+        if path == "/api/chat":
+            text = str(data.get("text") or "").strip()
+            if not text:
+                self._send_json(handler, 400, {"error": "empty message"})
+                return
+            try:
+                reply = self._chat_reply(text)
+            except Exception as e:
+                self._send_json(handler, 500, {"error": str(e)})
+                return
+            self._send_json(handler, 200, {"reply": reply})
+            return
+
+        if path == "/api/settings/api":
+            provider = str(data.get("provider") or "")
+            model = str(data.get("model") or "")
+            key = str(data.get("apiKey") or "").strip()
+            if not key:
+                key = load_api_settings()["api_key"]
+            if len(key) < 10:
+                self._send_json(handler, 400, {"error": "API Key 太短"})
+                return
+            save_api_settings(provider, model, key)
+            if hasattr(p, "ai") and p.ai is not None:
+                p.ai.switch(provider, model, key)
+            self._send_json(handler, 200, {"ok": True})
+            return
+
+        if path == "/api/settings/api/test":
+            provider = str(data.get("provider") or "")
+            model = str(data.get("model") or "")
+            key = str(data.get("apiKey") or "").strip()
+            if not key:
+                key = load_api_settings()["api_key"]
+            if len(key) < 10:
+                self._send_json(handler, 400, {"error": "API Key 太短"})
+                return
+            ok, msg = test_connection(provider, key, model)
+            self._send_json(handler, 200, {"ok": ok, "message": msg})
+            return
+
+        if path == "/api/settings/system":
+            try:
+                self._apply_system(data)
+            except ValueError as e:
+                self._send_json(handler, 400, {"error": str(e)})
+                return
+            self._send_json(handler, 200, {"ok": True})
+            return
+
+        if path == "/api/pet/size":
+            try:
+                scale = float(data.get("scale", 1.0))
+                scale = max(getattr(p, "min_scale", cfg.MIN_SCALE),
+                            min(getattr(p, "max_scale", cfg.MAX_SCALE), scale))
+                if hasattr(p, "_resize_pet"):
+                    p._resize_pet(scale)
+            except Exception as e:
+                self._send_json(handler, 500, {"error": str(e)})
+                return
+            self._send_json(handler, 200, {"ok": True, "scale": scale})
+            return
+
+        if path == "/api/settings/font":
+            family = str(data.get("family") or cfg.FONT_FAMILY)
+            size = int(data.get("size", cfg.FONT_SIZE))
+            size = max(cfg.FONT_SIZE_MIN, min(cfg.FONT_SIZE_MAX, size))
+            setattr(cfg, "FONT_FAMILY", family)
+            setattr(cfg, "FONT_SIZE", size)
+            self._send_json(handler, 200, {"ok": True})
+            return
+
+        if path == "/api/pet/restart":
+            self._send_json(handler, 200, {"ok": True})
+            root = getattr(p, "root", None)
+            if root is not None and hasattr(p, "restart"):
+                root.after(300, p.restart)
+            return
+
+        if path == "/api/pet/quit":
+            self._send_json(handler, 200, {"ok": True})
+            root = getattr(p, "root", None)
+            if root is not None and hasattr(p, "quit"):
+                root.after(300, p.quit)
+            return
+
+        self._send_json(handler, 404, {"error": "not found"})
+
+    def _handle_delete(self, handler: BaseHTTPRequestHandler) -> None:
+        path = urlparse(handler.path).path
+        if not self._check_token(handler):
+            self._send_json(handler, 401, {"error": "unauthorized"})
+            return
+        if path == "/api/history":
+            if hasattr(self.pet, "chat_history"):
+                self.pet.chat_history.clear()
+            self._send_json(handler, 200, {"ok": True})
             return
         self._send_json(handler, 404, {"error": "not found"})
 
@@ -220,7 +478,7 @@ class ManagementServer:
                 time.sleep(self.poll_interval)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
-        # ????? wfile???????? flush ??? handle_one_request ????
+        # 不主动关闭 wfile：客户端断开后的 flush 异常由 handle_one_request 静默处理
 
     def _serve_static(self, handler: BaseHTTPRequestHandler, path: str) -> None:
         base = os.path.normpath(self.static_dir)

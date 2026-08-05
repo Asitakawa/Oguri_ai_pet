@@ -16,9 +16,44 @@ export interface StatusPayload {
 }
 
 export interface ChatMessage {
-  role: "user" | "pet";
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
+}
+
+export interface ProviderInfo {
+  key: string;
+  name: string;
+  models: string[];
+}
+
+export interface SettingsPayload {
+  api: {
+    provider: string;
+    model: string;
+    keyConfigured: boolean;
+    providers: ProviderInfo[];
+    models: string[];
+  };
+  system: {
+    minAutoReply: number;
+    maxAutoReply: number;
+    presetMin: number;
+    presetMax: number;
+    memoryRounds: number;
+  };
+  font: {
+    family: string;
+    size: number;
+    sizeMin: number;
+    sizeMax: number;
+    families: string[];
+  };
+  pet: {
+    scale: number;
+    minScale: number;
+    maxScale: number;
+  };
 }
 
 export interface GameInfo {

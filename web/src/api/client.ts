@@ -1,4 +1,4 @@
-import type { StatusPayload } from "./types";
+import type { ChatMessage, SettingsPayload } from "./types";
 
 const TOKEN_KEY = "mgmt_token";
 
@@ -19,14 +19,14 @@ function getToken(): string {
   return sessionStorage.getItem(TOKEN_KEY) ?? "";
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const res = await fetch(path, {
     ...init,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { "X-Management-Token": token } : {}),
-      ...(init?.headers ?? {}),
+      ...(init.headers ?? {}),
     },
   });
   if (!res.ok) {
@@ -42,25 +42,74 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function requestText(path: string, init: RequestInit = {}): Promise<string> {
+  const token = getToken();
+  const res = await fetch(path, {
+    ...init,
+    headers: {
+      ...(token ? { "X-Management-Token": token } : {}),
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!res.ok) throw new Error(`API ${path} -> ${res.status}`);
+  return res.text();
+}
+
 export const api = {
-  getStatus(): Promise<StatusPayload> {
-    return request<StatusPayload>("/api/status");
+  getStatus() {
+    return request<import("./types").StatusPayload>("/api/status");
   },
-  feed(): Promise<StatusPayload> {
-    return request<StatusPayload>("/api/pet/feed", { method: "POST" });
+  feed() {
+    return request<import("./types").StatusPayload>("/api/pet/feed", { method: "POST" });
+  },
+  getHistory(q = ""): Promise<{ messages: ChatMessage[] }> {
+    return request(`/api/history${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+  },
+  sendChat(text: string): Promise<{ reply: string }> {
+    return request("/api/chat", { method: "POST", body: JSON.stringify({ text }) });
+  },
+  clearHistory(): Promise<{ ok: boolean }> {
+    return request("/api/history", { method: "DELETE" });
+  },
+  exportHistory(): Promise<string> {
+    return requestText("/api/history/export");
+  },
+  getSettings(): Promise<SettingsPayload> {
+    return request("/api/settings");
+  },
+  saveApi(p: { provider: string; model: string; apiKey: string }): Promise<{ ok: boolean }> {
+    return request("/api/settings/api", { method: "POST", body: JSON.stringify(p) });
+  },
+  testApi(p: { provider: string; model: string; apiKey: string }): Promise<{ ok: boolean; message: string }> {
+    return request("/api/settings/api/test", { method: "POST", body: JSON.stringify(p) });
+  },
+  saveSystem(s: SettingsPayload["system"]): Promise<{ ok: boolean }> {
+    return request("/api/settings/system", { method: "POST", body: JSON.stringify(s) });
+  },
+  setPetSize(scale: number): Promise<{ ok: boolean }> {
+    return request("/api/pet/size", { method: "POST", body: JSON.stringify({ scale }) });
+  },
+  saveFont(family: string, size: number): Promise<{ ok: boolean }> {
+    return request("/api/settings/font", { method: "POST", body: JSON.stringify({ family, size }) });
+  },
+  restartPet(): Promise<{ ok: boolean }> {
+    return request("/api/pet/restart", { method: "POST", body: "{}" });
+  },
+  quitPet(): Promise<{ ok: boolean }> {
+    return request("/api/pet/quit", { method: "POST", body: "{}" });
   },
 };
 
 /** SSE 状态流；返回关闭函数 */
 export function openStatusStream(
-  onStatus: (s: StatusPayload) => void,
+  onStatus: (s: import("./types").StatusPayload) => void,
   onError?: () => void,
 ): () => void {
   const token = getToken();
   const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
   es.addEventListener("status", (ev: MessageEvent) => {
     try {
-      onStatus(JSON.parse(String(ev.data)) as StatusPayload);
+      onStatus(JSON.parse(String(ev.data)) as import("./types").StatusPayload);
     } catch {
       /* ignore */
     }
