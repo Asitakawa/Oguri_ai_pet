@@ -1,3 +1,4 @@
+import { gsap } from "gsap";
 import type { Ctx, View } from "./types";
 import { api } from "../api/client";
 import type { ChatMessage } from "../api/types";
@@ -48,6 +49,7 @@ export const Chat: View = {
     </div>`;
   },
   async mount(ctx: Ctx) {
+    gsap.from(".chat-panel", { opacity: 0, y: 14, duration: 0.35, ease: "power2.out" });
     const listEl = () => document.getElementById("chat-list");
     const inputEl = () => document.getElementById("chat-input") as HTMLInputElement | null;
     const searchEl = () => document.getElementById("chat-search") as HTMLInputElement | null;

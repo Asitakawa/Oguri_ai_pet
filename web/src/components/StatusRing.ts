@@ -12,7 +12,7 @@ export interface RingOpts {
 export function ringHTML(o: RingOpts): string {
   const off = CIRC * (1 - o.pct / 100);
   return `
-  <div class="ring">
+  <div class="ring" id="${o.id}-wrap">
     <svg viewBox="0 0 100 100" class="ring-svg">
       <circle class="ring-track" cx="50" cy="50" r="${R}"/>
       <circle class="ring-bar" id="${o.id}" cx="50" cy="50" r="${R}"

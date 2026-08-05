@@ -296,3 +296,14 @@
   font-size: 13px; white-space: pre-wrap; word-break: break-word;
   max-height: 200px; overflow: auto;
 }
+
+/* ========== 视图过渡 ========== */
+#view-root > .view { animation: viewIn .25s ease both; }
+@keyframes viewIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ========== 状态环低值告警 ========== */
+.ring.low .ring-bar { stroke: var(--c-rose-deep); filter: drop-shadow(0 0 5px var(--c-rose-deep)); }
+.ring.low .ring-label { color: var(--c-rose-deep); font-weight: 600; }

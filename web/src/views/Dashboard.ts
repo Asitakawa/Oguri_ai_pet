@@ -63,6 +63,8 @@ export const Dashboard: View = {
       const s = ctx.store.getState();
       ringUpdate("ring-hunger", s.hunger);
       ringUpdate("ring-energy", s.energy);
+      document.getElementById("ring-hunger-wrap")?.classList.toggle("low", s.hunger < 30);
+      document.getElementById("ring-energy-wrap")?.classList.toggle("low", s.energy < 25);
     });
 
     ctx.root.querySelector("[data-action='feed']")?.addEventListener("click", async () => {
