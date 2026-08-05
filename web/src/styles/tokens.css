@@ -14,19 +14,36 @@
   --c-sky: #b8cfe0;
   --c-sky-deep: #94b4cc;
 
+  /* 语义色 */
   --c-bg: var(--c-snow);
   --c-panel: var(--c-cream);
   --c-text: var(--c-wood);
+  --c-text-strong: #6b563f;
   --c-accent: var(--c-ash-dark);
   --c-bubble-bg: #fffefb;
   --c-bubble-outline: var(--c-ash-light);
   --c-input-bg: #f7f4ef;
 
-  /* 圆角 / 阴影 / 字体 */
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 22px;
-  --shadow-soft: 0 8px 30px rgba(139, 115, 85, 0.1);
-  --shadow-card: 0 4px 20px rgba(139, 115, 85, 0.08);
+  /* 玻璃拟态（参考 OpenPets 控制中心设计语言 + 暖色适配） */
+  --glass-bg: rgba(255, 254, 251, 0.72);
+  --glass-bg-strong: rgba(255, 254, 251, 0.86);
+  --glass-border: rgba(196, 168, 130, 0.35);
+  --glass-border-strong: rgba(196, 168, 130, 0.55);
+  --glass-blur: 20px;
+  --glass-inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --shadow-glass: 0 20px 50px rgba(139, 115, 85, 0.14);
+  --shadow-glass-lg: 0 28px 70px rgba(139, 115, 85, 0.2);
+  --shadow-card: 0 6px 24px rgba(139, 115, 85, 0.1);
+
+  /* 渐变 */
+  --grad-primary: linear-gradient(135deg, #bdd3e6, #8fb4d0);
+  --grad-mint: linear-gradient(135deg, #c3dccd, #93bbaa);
+  --grad-rose: linear-gradient(135deg, #efd0c8, #d2a396);
+  --grad-wood: linear-gradient(135deg, #cfb691, #8b7355);
+
+  /* 圆角 / 字体 */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
   --font-base: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
 }

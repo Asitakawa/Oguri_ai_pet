@@ -13,9 +13,16 @@ body {
 
 body {
   font-family: var(--font-base);
-  background: var(--c-bg);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
+  /* ??????????? + ??/??/??????????? OpenPets ???? + 2025 ??????? */
+  background:
+    radial-gradient(1100px 760px at 12% -10%, rgba(224, 200, 192, 0.34), transparent 60%),
+    radial-gradient(1000px 700px at 108% 14%, rgba(189, 214, 200, 0.4), transparent 55%),
+    radial-gradient(960px 880px at 48% 122%, rgba(184, 207, 224, 0.34), transparent 60%),
+    linear-gradient(160deg, #f8f6f2 0%, #f5efe8 46%, #eef4ee 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
 }
 
 #app {
@@ -33,11 +40,41 @@ body {
 
 .boot-title {
   font-size: 28px;
-  font-weight: 700;
-  color: var(--c-wood);
+  font-weight: 800;
+  background: linear-gradient(135deg, #cfb691, #8b7355);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .boot-sub {
   font-size: 14px;
   color: var(--c-ash-dark);
+}
+
+/* ???? */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(184, 192, 204, 0.45);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(184, 192, 204, 0.7);
+}
+
+/* ?????????? */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
