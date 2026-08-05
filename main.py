@@ -11,6 +11,13 @@ import time
 from core.paths import get_data_path
 from utils.logger import get_logger
 
+# 控制台编码容错：GBK 终端下 emoji 输出不抛异常
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 log = get_logger("main")
 
 _LOCK_PORT = 45897

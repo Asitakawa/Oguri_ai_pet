@@ -13,6 +13,12 @@ from game.eating_rush.game import EatingRushGame
 from game.fishing.game import FishingGame
 from game.onigiri_catch.game import OnigiriCatchGame
 
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 user32 = ctypes.windll.user32
 
 
@@ -53,6 +59,9 @@ class FakePet:
     def tilt_head(self, callback=None):
         if callback:
             self.root.after(120, callback)
+
+    def start_bounce_animation(self):
+        pass
 
 
 def _pump(root, seconds):

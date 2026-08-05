@@ -15,6 +15,12 @@ from game.eating_rush.game import EatingRushGame
 from game.fishing.game import FishingGame
 from game.onigiri_catch.game import OnigiriCatchGame
 
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
+
 OUT_DIR = pathlib.Path(r"C:\Users\Arelq_\.codex\visualizations\2026\08\04\019fcba0-2abb-7660-9f91-cd03537a1e49")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -58,6 +64,9 @@ class FakePet:
     def tilt_head(self, callback=None):
         if callback:
             self.root.after(120, callback)
+
+    def start_bounce_animation(self):
+        pass
 
 
 def _pump(root, seconds):
