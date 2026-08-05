@@ -23,7 +23,7 @@ _MILESTONE_TEXTS = {5: "训练员喂得好快！", 10: "一半了！但还只是
 class EatingRushGame(BaseGame):
     NAME = "大胃王速吃"
     DESCRIPTION = "限时狂点，把一碗饭吃完！"
-    RULE_TEXT = "这是今天的第…碗？训练员，开动啦！"
+    RULE_TEXT = "这是今天的第…碗？训练员，开动啦！（点任意处或按空格）"
     FRAME_MS = 100
 
     def __init__(self, pet) -> None:
@@ -35,7 +35,7 @@ class EatingRushGame(BaseGame):
         self._time_left = EatingRules.TIME_LIMIT
         self._finished = False
         self._bowl_canvas: Optional[tk.Canvas] = None
-        self._rice_label: Optional[tk.Label] = None
+        self._food_label: Optional[tk.Label] = None
         self._time_label: Optional[tk.Label] = None
         self._boost_label: Optional[tk.Label] = None
 
@@ -48,23 +48,32 @@ class EatingRushGame(BaseGame):
         self._bite_count = 0
         self._time_left = EatingRules.TIME_LIMIT
         self._finished = False
-        self._bind(self.pet.label, "<Button-1>", self._on_bite)
+        # 任意位置点击（含桌宠/面板）都算吃；面板作为点击目标，禁用拖动防误拖
+        self._set_counter_draggable(False)
+        self._bind_all("<Button-1>", self._on_bite)
         self._bind_all("<KeyPress-space>", self._on_bite)
         self._render()
         self._schedule(self.FRAME_MS, self._tick)
 
+    # ── 面板（碗 + 饭量/时间 + 暴食状态） ──
     def _build_counter(self, panel: tk.Frame) -> None:
-        self._bowl_canvas = tk.Canvas(panel, width=180, height=64,
+        self._bowl_canvas = tk.Canvas(panel, width=200, height=70,
                                       bg=cfg.C_BG, highlightthickness=0)
-        self._bowl_canvas.pack(padx=8, pady=(6, 2))
-        self._rice_label = tk.Label(panel, text="", font=("Segoe UI Emoji", 14), bg=cfg.C_BG)
-        self._rice_label.pack()
-        self._time_label = tk.Label(panel, text="", font=(cfg.FONT_FAMILY, 12, "bold"),
+        self._bowl_canvas.grid(row=0, column=0, columnspan=2, padx=8, pady=(6, 2))
+        for col, title in enumerate(("饭量", "时间")):
+            tk.Label(panel, text=title, font=(cfg.FONT_FAMILY, 9),
+                     bg=cfg.C_BG, fg=cfg.C_ASH_DARK).grid(row=1, column=col, padx=8)
+        self._food_label = tk.Label(panel, text=f"{EatingRules.TOTAL_FOOD}/{EatingRules.TOTAL_FOOD}",
+                                    font=(cfg.FONT_FAMILY, 18, "bold"),
+                                    bg=cfg.C_BG, fg=cfg.C_WOOD)
+        self._food_label.grid(row=2, column=0, padx=8)
+        self._time_label = tk.Label(panel, text=f"{EatingRules.TIME_LIMIT:.0f}",
+                                    font=(cfg.FONT_FAMILY, 18, "bold"),
                                     bg=cfg.C_BG, fg=cfg.C_ROSE_DEEP)
-        self._time_label.pack()
-        self._boost_label = tk.Label(panel, text="", font=(cfg.FONT_FAMILY, 10),
+        self._time_label.grid(row=2, column=1, padx=8)
+        self._boost_label = tk.Label(panel, text="", font=(cfg.FONT_FAMILY, 10, "bold"),
                                      bg=cfg.C_BG, fg=cfg.C_ROSE)
-        self._boost_label.pack()
+        self._boost_label.grid(row=3, column=0, columnspan=2, pady=(0, 4))
         self._counter_label = self._time_label
 
     # ── 交互 ──────────────────────────────
@@ -108,28 +117,26 @@ class EatingRushGame(BaseGame):
     def _render(self) -> None:
         if self._bowl_canvas:
             self._draw_bowl()
-        if self._rice_label:
-            self._rice_label.config(text="🍚" * EatingRules.rice_count(self.food_left))
-        if self._time_label:
+        if getattr(self, "_food_label", None):
+            self._food_label.config(text=f"{self.food_left}/{EatingRules.TOTAL_FOOD}")
+        if getattr(self, "_time_label", None):
             urgent = self._time_left <= 5
-            self._time_label.config(
-                text=f"⏱ {self._time_left:.0f}s",
-                fg=cfg.C_ROSE if urgent else cfg.C_ROSE_DEEP)
-        if self._boost_label:
-            self._boost_label.config(text="🔥 暴食中！" if self._boost else "")
+            self._time_label.config(text=f"{self._time_left:.0f}",
+                                    fg=cfg.C_ROSE if urgent else cfg.C_ROSE_DEEP)
+        if getattr(self, "_boost_label", None):
+            self._boost_label.config(text="暴食中！" if self._boost else "")
 
     def _draw_bowl(self) -> None:
         c = self._bowl_canvas
         if not c:
             return
         c.delete("all")
-        c.create_rounded_rectangle(4, 4, 176, 60, radius=16,
+        c.create_rounded_rectangle(4, 4, 196, 66, radius=16,
                                    fill=cfg.C_WOOD_LIGHT, outline=cfg.C_WOOD)
         ratio = self.food_left / EatingRules.TOTAL_FOOD
-        c.create_rounded_rectangle(10, 18, 10 + 156 * ratio, 52, radius=10,
+        c.create_rounded_rectangle(10, 20, 10 + 176 * ratio, 58, radius=10,
                                    fill=cfg.C_SNOW, outline="")
-        c.create_text(90, 46, text=f"{self.food_left}/{EatingRules.TOTAL_FOOD}",
-                      font=(cfg.FONT_FAMILY, 10, "bold"), fill=cfg.C_WOOD)
+        c.create_text(28, 34, text="🍚", font=("Segoe UI Emoji", 16))
 
     # ── 结算 ──────────────────────────────
     def _finish_win(self) -> None:

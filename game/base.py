@@ -46,6 +46,7 @@ class BaseGame:
         self._saved_img: Optional[str] = None
         self._counter_win: Optional[tk.Toplevel] = None
         self._counter_label: Optional[tk.Label] = None
+        self._counter_panel: Optional[tk.Frame] = None
         self._counter_anchor: Optional[Tuple[int, int]] = None
         self._counter_drag_off = None
         self._last_talk = 0.0
@@ -198,22 +199,33 @@ class BaseGame:
         panel.pack(padx=4, pady=4)
         self._build_counter(panel)
         self._counter_win = win
-
-        def _press(e):
-            self._counter_drag_off = (
-                e.x_root - win.winfo_x(), e.y_root - win.winfo_y())
-
-        def _motion(e):
-            if self._counter_drag_off:
-                nx = e.x_root - self._counter_drag_off[0]
-                ny = e.y_root - self._counter_drag_off[1]
-                win.geometry(f"+{int(nx)}+{int(ny)}")
-
-        for w in [panel] + list(panel.winfo_children()):
-            w.bind("<ButtonPress-1>", _press)
-            w.bind("<B1-Motion>", _motion)
+        self._counter_panel = panel
+        self._set_counter_draggable(True)
         ax, ay = self._counter_anchor
         win.geometry(f"+{int(ax)}+{int(ay)}")
+
+    def _set_counter_draggable(self, draggable: bool) -> None:
+        """启用/禁用计数器窗口拖动（默认启用）。"""
+        widgets = []
+        if self._counter_panel:
+            widgets = [self._counter_panel] + list(self._counter_panel.winfo_children())
+        for w in widgets:
+            for seq in ("<ButtonPress-1>", "<B1-Motion>"):
+                try:
+                    w.bind(seq, self._counter_press if draggable else self._noop)
+                except Exception:
+                    pass
+
+    def _counter_press(self, event) -> None:
+        self._counter_drag_off = (
+            event.x_root - self._counter_win.winfo_x(),
+            event.y_root - self._counter_win.winfo_y())
+
+    def _counter_motion(self, event) -> None:
+        if self._counter_drag_off:
+            nx = event.x_root - self._counter_drag_off[0]
+            ny = event.y_root - self._counter_drag_off[1]
+            self._counter_win.geometry(f"+{int(nx)}+{int(ny)}")
 
     def _build_counter(self, panel: tk.Frame) -> None:
         """子类可覆盖，向 panel 中添加自己的控件。"""
@@ -234,6 +246,7 @@ class BaseGame:
                 pass
             self._counter_win = None
             self._counter_label = None
+            self._counter_panel = None
 
     # ── 恢复桌宠 ────────────────────────────
     def _restore_pet(self) -> None:
