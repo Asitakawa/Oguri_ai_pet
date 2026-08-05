@@ -1,4 +1,4 @@
-import type { ChatMessage, SettingsPayload } from "./types";
+import type { ChatMessage, GameInfo, SkillDetail, SkillInfo, SettingsPayload } from "./types";
 
 const TOKEN_KEY = "mgmt_token";
 
@@ -94,6 +94,36 @@ export const api = {
   },
   restartPet(): Promise<{ ok: boolean }> {
     return request("/api/pet/restart", { method: "POST", body: "{}" });
+  },
+  getGames(): Promise<{ games: GameInfo[]; active: string | null }> {
+    return request("/api/games");
+  },
+  toggleGame(key: string, enabled: boolean): Promise<{ games: GameInfo[]; active: string | null }> {
+    return request(`/api/games/${encodeURIComponent(key)}/toggle`, { method: "POST", body: JSON.stringify({ enabled }) });
+  },
+  startGame(key: string): Promise<{ games: GameInfo[]; active: string | null }> {
+    return request(`/api/games/${encodeURIComponent(key)}/start`, { method: "POST", body: "{}" });
+  },
+  stopGame(): Promise<{ games: GameInfo[]; active: string | null }> {
+    return request("/api/games/stop", { method: "POST", body: "{}" });
+  },
+  getSkills(): Promise<{ skills: SkillInfo[] }> {
+    return request("/api/skills");
+  },
+  getSkillDetail(name: string): Promise<SkillDetail> {
+    return request(`/api/skills/${encodeURIComponent(name)}`);
+  },
+  toggleSkill(name: string, enabled: boolean): Promise<{ ok: boolean }> {
+    return request(`/api/skills/${encodeURIComponent(name)}/toggle`, { method: "POST", body: JSON.stringify({ enabled }) });
+  },
+  executeSkill(name: string, args: Record<string, unknown>): Promise<{ result: string }> {
+    return request(`/api/skills/${encodeURIComponent(name)}/execute`, { method: "POST", body: JSON.stringify({ arguments: args }) });
+  },
+  deleteSkill(name: string): Promise<{ ok: boolean }> {
+    return request(`/api/skills/${encodeURIComponent(name)}`, { method: "DELETE" });
+  },
+  importSkill(filename: string, contentBase64: string): Promise<{ ok: boolean; message: string }> {
+    return request("/api/skills/import", { method: "POST", body: JSON.stringify({ filename, content: contentBase64 }) });
   },
   quitPet(): Promise<{ ok: boolean }> {
     return request("/api/pet/quit", { method: "POST", body: "{}" });

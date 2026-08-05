@@ -70,3 +70,14 @@ export interface SkillInfo {
   enabled: boolean;
   dirname: string;
 }
+export interface SkillParam {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+export interface SkillDetail extends SkillInfo {
+  parameters: SkillParam[];
+  skillMd: string;
+}

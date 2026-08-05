@@ -6,7 +6,9 @@
 """
 from __future__ import annotations
 
+import base64
 import json
+import tempfile
 import mimetypes
 import os
 import secrets
@@ -14,7 +16,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from core import config as cfg
 from core.ai_providers import (
@@ -242,6 +244,64 @@ class ManagementServer:
             lines.append("")
         return "\n".join(lines)
 
+    # ---------- 游戏 / 技能 ----------
+    def _games_payload(self) -> Dict[str, Any]:
+        p = self.pet
+        gm = getattr(p, "game_manager", None)
+        games: List[Dict[str, Any]] = []
+        active: Optional[str] = None
+        if gm is not None and hasattr(gm, "list_all"):
+            for key, name, enabled in gm.list_all():
+                desc = ""
+                try:
+                    from game import GAMES  # type: ignore
+
+                    desc = str(GAMES.get(key, {}).get("desc", ""))
+                except Exception:
+                    pass
+                games.append({
+                    "key": key, "name": name, "desc": desc,
+                    "enabled": bool(enabled), "active": False,
+                })
+            try:
+                if gm.is_active():
+                    act = getattr(gm, "_active", None)
+                    active = getattr(act, "NAME", None)
+                    for g in games:
+                        if active and g["name"] == active:
+                            g["active"] = True
+            except Exception:
+                pass
+        return {"games": games, "active": active}
+
+    def _skills_payload(self) -> Dict[str, Any]:
+        p = self.pet
+        sm = getattr(p, "skill_manager", None)
+        if sm is None or not hasattr(sm, "list_skills"):
+            return {"skills": []}
+        return {"skills": sm.list_skills()}
+
+    def _skill_detail(self, name: str) -> Optional[Dict[str, Any]]:
+        p = self.pet
+        sm = getattr(p, "skill_manager", None)
+        if sm is None or not hasattr(sm, "get_skill_detail"):
+            return None
+        detail = sm.get_skill_detail(name)
+        if detail is None:
+            return None
+        md = ""
+        try:
+            from core.skill_system.manager import SKILLS_DIR
+
+            path = os.path.join(SKILLS_DIR, detail["dirname"], "SKILL.md")
+            if os.path.isfile(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    md = f.read()
+        except Exception:
+            md = ""
+        detail["skillMd"] = md
+        return detail
+
     # ---------- HTTP ----------
     def _make_handler(self) -> type:
         server = self
@@ -338,6 +398,20 @@ class ManagementServer:
                 return
             if path == "/api/settings":
                 self._send_json(handler, 200, self._settings_payload())
+                return
+            if path == "/api/games":
+                self._send_json(handler, 200, self._games_payload())
+                return
+            if path == "/api/skills":
+                self._send_json(handler, 200, self._skills_payload())
+                return
+            if path.startswith("/api/skills/"):
+                name = unquote(path[len("/api/skills/"):])
+                detail = self._skill_detail(name)
+                if detail is None:
+                    self._send_json(handler, 404, {"error": "skill not found"})
+                    return
+                self._send_json(handler, 200, detail)
                 return
             self._send_json(handler, 404, {"error": "not found"})
             return
@@ -450,6 +524,78 @@ class ManagementServer:
                 root.after(300, p.quit)
             return
 
+        if path.startswith("/api/games/"):
+            rest = path[len("/api/games/"):]
+            if rest.endswith("/toggle"):
+                key = unquote(rest[: -len("/toggle")])
+                enabled = bool(data.get("enabled"))
+                if hasattr(p, "game_manager") and hasattr(p.game_manager, "set_enabled"):
+                    p.game_manager.set_enabled(key, enabled)
+                self._send_json(handler, 200, self._games_payload())
+                return
+            if rest.endswith("/start"):
+                key = unquote(rest[: -len("/start")])
+                if hasattr(p, "game_manager") and hasattr(p.game_manager, "start"):
+                    p.game_manager.start(key)
+                self._send_json(handler, 200, self._games_payload())
+                return
+            if rest == "stop" or rest.endswith("/stop"):
+                if hasattr(p, "game_manager") and hasattr(p.game_manager, "stop"):
+                    p.game_manager.stop()
+                self._send_json(handler, 200, self._games_payload())
+                return
+
+        if path == "/api/skills/import":
+            filename = str(data.get("filename") or "")
+            b64 = str(data.get("content") or "")
+            if not filename or not b64:
+                self._send_json(handler, 400, {"error": "缺少文件"})
+                return
+            is_zip = filename.lower().endswith(".zip")
+            try:
+                raw = base64.b64decode(b64)
+            except Exception:
+                self._send_json(handler, 400, {"error": "base64 解码失败"})
+                return
+            tmp = os.path.join(tempfile.gettempdir(), "skill_import_" + secrets.token_hex(6) + (".zip" if is_zip else ".py"))
+            try:
+                with open(tmp, "wb") as f:
+                    f.write(raw)
+                if hasattr(p, "skill_manager"):
+                    if is_zip:
+                        ok, msg = p.skill_manager.add_skill_zip(tmp)
+                    else:
+                        ok, msg = p.skill_manager.add_skill(tmp)
+                else:
+                    ok, msg = False, "技能管理器不可用"
+            except Exception as e:
+                ok, msg = False, str(e)
+            finally:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+            self._send_json(handler, 200, {"ok": ok, "message": msg})
+            return
+
+        if path.startswith("/api/skills/"):
+            rest = path[len("/api/skills/"):]
+            if rest.endswith("/toggle"):
+                name = unquote(rest[: -len("/toggle")])
+                enabled = bool(data.get("enabled"))
+                if hasattr(p, "skill_manager") and hasattr(p.skill_manager, "toggle"):
+                    p.skill_manager.toggle(name, enabled)
+                self._send_json(handler, 200, {"ok": True})
+                return
+            if rest.endswith("/execute"):
+                name = unquote(rest[: -len("/execute")])
+                args = data.get("arguments") or {}
+                if hasattr(p, "skill_manager") and hasattr(p.skill_manager, "execute"):
+                    result = p.skill_manager.execute(name, json.dumps(args, ensure_ascii=False))
+                else:
+                    result = "技能管理器不可用"
+                self._send_json(handler, 200, {"result": result})
+                return
         self._send_json(handler, 404, {"error": "not found"})
 
     def _handle_delete(self, handler: BaseHTTPRequestHandler) -> None:
@@ -461,6 +607,13 @@ class ManagementServer:
             if hasattr(self.pet, "chat_history"):
                 self.pet.chat_history.clear()
             self._send_json(handler, 200, {"ok": True})
+            return
+        if path.startswith("/api/skills/"):
+            name = unquote(path[len("/api/skills/"):])
+            ok = False
+            if hasattr(self.pet, "skill_manager") and hasattr(self.pet.skill_manager, "remove_skill"):
+                ok = bool(self.pet.skill_manager.remove_skill(name))
+            self._send_json(handler, 200, {"ok": ok})
             return
         self._send_json(handler, 404, {"error": "not found"})
 
