@@ -77,6 +77,7 @@ class OnigiriCatchGame(BaseGame):
         self.pet._move()
         self._create_overlay()
         self._bind_all("<KeyPress-space>", self._toggle_pause)
+        self._render_counter(float(self.GAME_SECONDS))
         self._schedule(self.FRAME_MS, self._update)
 
     def stop(self) -> None:
@@ -87,6 +88,41 @@ class OnigiriCatchGame(BaseGame):
         text = CatchRules.score_tier(self.score)
         text += f"（接到 {self.caught} 个，漏掉 {self.missed} 个）"
         self._finish(text)
+
+    # ── 分数面板（三栏排版） ────────────────
+    def _build_counter(self, panel: tk.Frame) -> None:
+        headers = [("得分", cfg.C_MINT_DEEP), ("时间", cfg.C_ROSE_DEEP), ("连击", cfg.C_SKY_DEEP)]
+        for col, (title, fg) in enumerate(headers):
+            tk.Label(panel, text=title, font=(cfg.FONT_FAMILY, 9),
+                     bg=cfg.C_BG, fg=cfg.C_ASH_DARK).grid(
+                row=0, column=col, padx=10, pady=(6, 0))
+        self._score_label = tk.Label(panel, text="0", font=(cfg.FONT_FAMILY, 22, "bold"),
+                                     bg=cfg.C_BG, fg=cfg.C_MINT_DEEP)
+        self._score_label.grid(row=1, column=0, padx=10)
+        self._time_label = tk.Label(panel, text=str(self.GAME_SECONDS),
+                                    font=(cfg.FONT_FAMILY, 22, "bold"),
+                                    bg=cfg.C_BG, fg=cfg.C_ROSE_DEEP)
+        self._time_label.grid(row=1, column=1, padx=10)
+        self._combo_label = tk.Label(panel, text="0", font=(cfg.FONT_FAMILY, 22, "bold"),
+                                     bg=cfg.C_BG, fg=cfg.C_ASH)
+        self._combo_label.grid(row=1, column=2, padx=10)
+        self._status_label = tk.Label(panel, text="", font=(cfg.FONT_FAMILY, 9),
+                                      bg=cfg.C_BG, fg=cfg.C_ROSE)
+        self._status_label.grid(row=2, column=0, columnspan=3, pady=(0, 4))
+
+    def _render_counter(self, remaining: float) -> None:
+        if getattr(self, "_score_label", None):
+            self._score_label.config(text=str(self.score))
+        if getattr(self, "_time_label", None):
+            urgent = remaining <= 5
+            self._time_label.config(text=str(int(remaining)),
+                                    fg=cfg.C_ROSE if urgent else cfg.C_ROSE_DEEP)
+        if getattr(self, "_combo_label", None):
+            self._combo_label.config(text=str(self.max_combo),
+                                     fg=cfg.C_SKY_DEEP if self.max_combo else cfg.C_ASH)
+        if getattr(self, "_status_label", None):
+            self._status_label.config(
+                text="已暂停（空格继续）" if self._paused else "")
 
     # ── 覆盖层 ────────────────────────────
     def _create_overlay(self) -> None:
@@ -125,7 +161,7 @@ class OnigiriCatchGame(BaseGame):
         if not self._active:
             return
         if self._paused:
-            self._update_counter("⏸ 已暂停（空格继续）")
+            self._render_counter(max(0, self.GAME_SECONDS - self._elapsed))
             self._schedule(self.FRAME_MS, self._update)
             return
         dt = self.FRAME_MS / 1000.0
@@ -146,7 +182,7 @@ class OnigiriCatchGame(BaseGame):
         if remaining <= 0:
             self._finish_game()
             return
-        self._update_counter(f"{self.score} 分  {int(remaining)}s  🔥{self.max_combo}")
+        self._render_counter(remaining)
         self._schedule(self.FRAME_MS, self._update)
 
     def _toggle_pause(self, event=None) -> None:
