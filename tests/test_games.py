@@ -142,9 +142,16 @@ def test_fishing_zone_half():
 
 def test_fishing_bobber_range():
     for t in (0, 1, 2, 3, 10):
-        y = FishingRules.bobber_y(t)
+        y = FishingRules.bobber_y(t, 1)
         assert FishingRules.CENTER_Y - FishingRules.AMPLITUDE - 1 <= y <= FishingRules.CENTER_Y + FishingRules.AMPLITUDE + 1
-    assert abs(FishingRules.bobber_y(0) - FishingRules.CENTER_Y) < 1
+    assert abs(FishingRules.bobber_y(0, 1) - FishingRules.CENTER_Y) < 1
+
+
+def test_fishing_period_at():
+    assert FishingRules.period_at(1) == 4.0
+    assert FishingRules.period_at(4) == 3.2
+    assert FishingRules.period_at(7) == 2.6
+    assert FishingRules.period_at(8) == 2.6
 
 
 def test_fishing_judge():
@@ -166,9 +173,9 @@ def test_fishing_reward():
 
 def test_fishing_result_tier():
     assert "睡觉" in FishingRules.result_tier(3)
-    assert "晚餐" in FishingRules.result_tier(10)
-    assert "满载" in FishingRules.result_tier(15)
-    assert "冠军" in FishingRules.result_tier(25)
+    assert "晚餐" in FishingRules.result_tier(8)
+    assert "满载" in FishingRules.result_tier(12)
+    assert "冠军" in FishingRules.result_tier(16)
 
 
 # ── 注册表 ──────────────────────────────

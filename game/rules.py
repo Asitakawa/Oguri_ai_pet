@@ -209,11 +209,11 @@ class DashRules:
 class FishingRules:
     """钓鱼时机：浮标运动、区间收窄、判定、奖励。"""
 
-    TOTAL_ROUNDS = 10
-    ROUND_SECONDS = 8.0
+    TOTAL_ROUNDS = 8
+    ROUND_SECONDS = 6.0
     RESULT_SECONDS = 2.0
     AMPLITUDE = 150.0
-    PERIOD = 4.0
+    PERIOD = 4.0          # 基础周期（period_at 按回合加速）
     CENTER_Y = 260.0
 
     @staticmethod
@@ -225,9 +225,18 @@ class FishingRules:
         return 30.0
 
     @staticmethod
-    def bobber_y(elapsed: float) -> float:
+    def period_at(round_no: int) -> float:
+        if round_no <= 3:
+            return 4.0
+        if round_no <= 6:
+            return 3.2
+        return 2.6
+
+    @staticmethod
+    def bobber_y(elapsed: float, round_no: int = 1) -> float:
+        period = FishingRules.period_at(round_no)
         return (FishingRules.CENTER_Y
-                + FishingRules.AMPLITUDE * math.sin(2 * math.pi * elapsed / FishingRules.PERIOD))
+                + FishingRules.AMPLITUDE * math.sin(2 * math.pi * elapsed / period))
 
     @staticmethod
     def judge(offset: float, zone_half: float) -> str:
@@ -250,8 +259,8 @@ class FishingRules:
     def result_tier(points: int) -> str:
         if points <= 5:
             return "今天的鱼都在睡觉"
-        if points <= 12:
+        if points <= 10:
             return "晚餐有着落了！"
-        if points <= 18:
+        if points <= 14:
             return "满载而归！今晚吃鱼！"
         return "这是钓鱼冠军吧！"
