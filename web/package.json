@@ -1,0 +1,21 @@
+{
+  "name": "oguri-pet-manager",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "gsap": "^3.12.5"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.3",
+    "vite": "^6.1.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
+}

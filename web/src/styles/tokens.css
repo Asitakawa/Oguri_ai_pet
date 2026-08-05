@@ -1,0 +1,32 @@
+:root {
+  /* 小栗帽主题色（继承 core/config.py） */
+  --c-snow: #faf8f5;
+  --c-cream: #f3ede5;
+  --c-ash: #b8c0cc;
+  --c-ash-dark: #8893a0;
+  --c-ash-light: #d4dae2;
+  --c-wood: #8b7355;
+  --c-wood-light: #c4a882;
+  --c-rose: #e8c8c0;
+  --c-rose-deep: #d4a99a;
+  --c-mint: #bdd6c8;
+  --c-mint-deep: #9bc0ae;
+  --c-sky: #b8cfe0;
+  --c-sky-deep: #94b4cc;
+
+  --c-bg: var(--c-snow);
+  --c-panel: var(--c-cream);
+  --c-text: var(--c-wood);
+  --c-accent: var(--c-ash-dark);
+  --c-bubble-bg: #fffefb;
+  --c-bubble-outline: var(--c-ash-light);
+  --c-input-bg: #f7f4ef;
+
+  /* 圆角 / 阴影 / 字体 */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --shadow-soft: 0 8px 30px rgba(139, 115, 85, 0.1);
+  --shadow-card: 0 4px 20px rgba(139, 115, 85, 0.08);
+  --font-base: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+}
