@@ -138,6 +138,15 @@ class ManagementServer:
             def do_POST(self) -> None:  # noqa: N802
                 server._handle_post(self)
 
+            def handle_one_request(self) -> None:
+                # ????????? SSE ???????? flush ???? wfile?
+                # ? ValueError/BrokenPipe ??????????
+                try:
+                    super().handle_one_request()
+                except (ValueError, BrokenPipeError, ConnectionResetError,
+                        ConnectionAbortedError, TimeoutError):
+                    pass
+
             def log_message(self, *args: Any) -> None:
                 pass
 
@@ -211,11 +220,7 @@ class ManagementServer:
                 time.sleep(self.poll_interval)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
-        finally:
-            try:
-                handler.wfile.close()
-            except Exception:
-                pass
+        # ????? wfile???????? flush ??? handle_one_request ????
 
     def _serve_static(self, handler: BaseHTTPRequestHandler, path: str) -> None:
         base = os.path.normpath(self.static_dir)
