@@ -88,13 +88,38 @@ def test_dash_speed_at():
 
 def test_dash_pick_obstacle_kinds():
     for elapsed in (0, 35, 60):
-        for _ in range(60):
-            assert DashRules.pick_obstacle(elapsed) in ("low", "high", "double", "flyer")
+        for _ in range(80):
+            assert DashRules.pick_obstacle(elapsed) in (
+                "hurdle", "rock", "wall", "tree", "double", "bird")
 
 
-def test_dash_flyer_only_late():
+def test_dash_bird_and_double_only_late():
     for _ in range(300):
-        assert DashRules.pick_obstacle(10) != "flyer"
+        assert DashRules.pick_obstacle(10) not in ("bird", "double")
+
+
+def test_dash_hard_recovery():
+    for _ in range(100):
+        assert DashRules.pick_obstacle(60, last_kind="bird") in ("hurdle", "rock")
+        assert DashRules.pick_obstacle(60, last_kind="double") in ("hurdle", "rock")
+
+
+def test_dash_obstacle_rects():
+    one = DashRules.obstacle_rects("wall", 100, 700, 5, 180)
+    assert len(one) == 1 and one[0]["h"] == 90
+    low = DashRules.obstacle_rects("hurdle", 100, 700, 5, 180)
+    assert low[0]["y"] == 700 - 38
+    two = DashRules.obstacle_rects("double", 100, 700, 5, 180)
+    assert len(two) == 2 and two[1]["x"] > two[0]["x"]
+    bird = DashRules.obstacle_rects("bird", 100, 700, 5, 180)
+    assert bird[0]["y"] < 700 - 180  # 飞鸟在桌宠头顶之上
+
+
+def test_dash_pet_hitbox():
+    x, y, w, h = DashRules.pet_hitbox(0, 0, 180, 180)
+    assert w < 180 and h <= 180
+    assert x > 0 and y > 0
+    assert y + h == 180  # 底部对齐
 
 
 def test_dash_distance_tier():

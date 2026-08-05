@@ -93,7 +93,7 @@ class EatingRules:
 
 # ── 冲刺障碍跑 ──────────────────────────
 class DashRules:
-    """冲刺障碍跑：垂直物理、碰撞、障碍生成、分档。"""
+    """冲刺障碍跑：垂直物理、碰撞、障碍生成与打磨。"""
 
     JUMP_V = -15.0
     GRAVITY = 0.8
@@ -102,8 +102,36 @@ class DashRules:
     SPEEDUP_EVERY = 10.0    # 秒
     SPEEDUP_STEP = 0.5
     PX_PER_METER = 10.0
-    SPAWN_MIN_FRAMES = 55
-    SPAWN_MAX_FRAMES = 110
+    MIN_GAP_S = 1.1         # 障碍最小间隔（秒，按时间保证反应公平）
+    MAX_GAP_S = 2.0
+    FIRST_GAP_S = 0.8       # 首个障碍出现延迟
+    DOUBLE_GAP_FRAMES = 40  # 双栏间距 = speed × 帧数（>单跳覆盖，强制二连跳）
+
+    # 障碍几何（视觉样式由游戏层映射）
+    OBSTACLES: Dict[str, dict] = {
+        "hurdle": {"w": 26, "h": 38},
+        "rock":   {"w": 36, "h": 30},
+        "wall":   {"w": 30, "h": 90},
+        "tree":   {"w": 46, "h": 96},
+        "bird":   {"w": 60, "h": 24},
+    }
+    # 各阶段可出现的障碍及权重
+    PHASES = (
+        ((0, 30),   [("hurdle", 0.35), ("rock", 0.25), ("wall", 0.20), ("tree", 0.20)]),
+        ((30, 45),  [("hurdle", 0.30), ("rock", 0.22), ("wall", 0.18), ("tree", 0.18), ("double", 0.12)]),
+        ((45, 1e9), [("hurdle", 0.25), ("rock", 0.20), ("wall", 0.15), ("tree", 0.15), ("double", 0.15), ("bird", 0.10)]),
+    )
+
+    @staticmethod
+    def _weighted(pool) -> str:
+        total = sum(w for _, w in pool)
+        r = random.uniform(0, total)
+        acc = 0.0
+        for kind, w in pool:
+            acc += w
+            if r <= acc:
+                return kind
+        return pool[-1][0]
 
     @staticmethod
     def step_vertical(pet_y: float, vy: float, on_ground: bool, ground_y: float):
@@ -125,28 +153,44 @@ class DashRules:
         return not (px + pw <= ox or ox + ow <= px or py + ph <= oy or oy + oh <= py)
 
     @staticmethod
+    def pet_hitbox(pet_x: float, pet_y: float, pet_w: float, pet_h: float):
+        """收紧桌宠碰撞盒（避免透明边角误判），底部对齐。"""
+        hw = pet_w * 0.60
+        hh = pet_h * 0.95
+        return pet_x + (pet_w - hw) / 2, pet_y + (pet_h - hh), hw, hh
+
+    @staticmethod
     def speed_at(elapsed: float) -> float:
         return min(DashRules.MAX_SPEED,
                    DashRules.BASE_SPEED + DashRules.SPEEDUP_STEP * int(elapsed // DashRules.SPEEDUP_EVERY))
 
     @staticmethod
-    def pick_obstacle(elapsed: float) -> str:
-        r = random.random()
-        if elapsed >= 45:
-            if r < 0.40:
-                return "low"
-            if r < 0.60:
-                return "high"
-            if r < 0.80:
-                return "double"
-            return "flyer"
-        if elapsed >= 30:
-            if r < 0.50:
-                return "low"
-            if r < 0.75:
-                return "high"
-            return "double"
-        return "low" if r < 0.60 else "high"
+    def pick_obstacle(elapsed: float, last_kind: str = None) -> str:
+        """按阶段加权选择障碍；硬障碍（双栏/飞鸟）后强制给喘息。"""
+        if last_kind in ("double", "bird"):
+            return random.choice(["hurdle", "rock"])
+        for (start, end), pool in DashRules.PHASES:
+            if start <= elapsed < end:
+                return DashRules._weighted(pool)
+        return "hurdle"
+
+    @staticmethod
+    def obstacle_rects(kind: str, x: float, ground_line: float,
+                       speed: float, pet_h: float):
+        """生成障碍矩形列表（双栏返回两段，间距随速度缩放）。"""
+        if kind == "double":
+            spec = DashRules.OBSTACLES["hurdle"]
+            gap = int(speed * DashRules.DOUBLE_GAP_FRAMES)
+            return [
+                {"kind": "hurdle", "x": x, "y": ground_line - spec["h"], "w": spec["w"], "h": spec["h"]},
+                {"kind": "hurdle", "x": x + gap, "y": ground_line - spec["h"], "w": spec["w"], "h": spec["h"]},
+            ]
+        if kind == "bird":
+            spec = DashRules.OBSTACLES["bird"]
+            y = ground_line - pet_h - 60
+            return [{"kind": "bird", "x": x, "y": y, "w": spec["w"], "h": spec["h"]}]
+        spec = DashRules.OBSTACLES[kind]
+        return [{"kind": kind, "x": x, "y": ground_line - spec["h"], "w": spec["w"], "h": spec["h"]}]
 
     @staticmethod
     def distance_tier(meters: float) -> str:

@@ -5,6 +5,7 @@ import random
 import tkinter as tk
 from typing import List, Optional
 
+import utils.tk_ext  # noqa: F401  确保 Canvas 圆角扩展可用
 from core import config as cfg
 from game.base import BaseGame
 from game.rules import DashRules
@@ -13,6 +14,13 @@ from utils.logger import get_logger
 log = get_logger("game.dash")
 
 _HIT_TEXTS = ["呜哇！被绊到了…", "啊！那个是石头吗"]
+_KIND_STYLE = {
+    "hurdle": {"color": cfg.C_WOOD_LIGHT, "emoji": "🚧"},
+    "rock":   {"color": cfg.C_ASH,        "emoji": "🪨"},
+    "wall":   {"color": cfg.C_ROSE_DEEP,  "emoji": "🧱"},
+    "tree":   {"color": cfg.C_MINT_DEEP,  "emoji": "🌲"},
+    "bird":   {"color": cfg.C_SKY_DEEP,   "emoji": "🐦"},
+}
 
 
 class DashRunGame(BaseGame):
@@ -32,7 +40,8 @@ class DashRunGame(BaseGame):
         self._hitting = False
         self._ground_line = 0.0
         self._fixed_x = 0
-        self._spawn_countdown = 0
+        self._spawn_cd = DashRules.FIRST_GAP_S
+        self._last_kind: Optional[str] = None
         self._overlay: Optional[tk.Toplevel] = None
         self._canvas: Optional[tk.Canvas] = None
 
@@ -52,8 +61,8 @@ class DashRunGame(BaseGame):
         self._vy = 0.0
         self._on_ground = True
         self._hitting = False
-        self._spawn_countdown = random.randint(DashRules.SPAWN_MIN_FRAMES,
-                                               DashRules.SPAWN_MAX_FRAMES)
+        self._spawn_cd = DashRules.FIRST_GAP_S
+        self._last_kind = None
         self._bind_all("<Button-1>", self._on_jump)
         self._bind_all("<KeyPress-space>", self._on_jump)
         self._create_overlay()
@@ -121,39 +130,34 @@ class DashRunGame(BaseGame):
             self.pet.y, self._vy, self._on_ground, ground_y)
         self.pet._move()
         self._distance_px += self._speed
-        self._spawn_countdown -= 1
-        if self._spawn_countdown <= 0:
+        # 按时间间隔生成障碍（保证任意速度下的反应时间）
+        self._spawn_cd -= dt
+        if self._spawn_cd <= 0:
             self._spawn_obstacle()
-            self._spawn_countdown = random.randint(DashRules.SPAWN_MIN_FRAMES,
-                                                   DashRules.SPAWN_MAX_FRAMES)
+            self._spawn_cd = random.uniform(DashRules.MIN_GAP_S, DashRules.MAX_GAP_S)
         hit = self._step_obstacles()
         self._draw_ground()
         meters = self._distance_px / DashRules.PX_PER_METER
-        self._update_counter(f"{int(meters)} 米  ⚡{self._speed:.0f}")
+        self._update_counter(f"{int(meters)} 米  速度{self._speed:.0f}")
         if hit is not None:
             self._on_hit(hit)
             return
         self._schedule(self.FRAME_MS, self._update)
 
     def _spawn_obstacle(self) -> None:
-        kind = DashRules.pick_obstacle(self._elapsed)
-        x = self.pet.screen_w + 20
-        if kind == "low":
-            self._obstacles.append({"kind": kind, "x": x, "y": self._ground_line - 40, "w": 28, "h": 40})
-        elif kind == "high":
-            self._obstacles.append({"kind": kind, "x": x, "y": self._ground_line - 85, "w": 30, "h": 85})
-        elif kind == "double":
-            self._obstacles.append({"kind": kind, "x": x, "y": self._ground_line - 40, "w": 28, "h": 40})
-            self._obstacles.append({"kind": kind, "x": x + 140, "y": self._ground_line - 40, "w": 28, "h": 40})
-        else:  # flyer：空中飞行物，需贴地通过
-            fly_y = self._ground_line - self.pet.pet_size[1] - 60
-            self._obstacles.append({"kind": kind, "x": x, "y": fly_y, "w": 60, "h": 26})
+        kind = DashRules.pick_obstacle(self._elapsed, self._last_kind)
+        self._last_kind = kind
+        self._obstacles.extend(DashRules.obstacle_rects(
+            kind, self.pet.screen_w + 20, self._ground_line,
+            self._speed, self.pet.pet_size[1]))
 
     def _step_obstacles(self):
-        if not self._canvas:
+        c = self._canvas
+        if not c:
             return None
-        self._canvas.delete("obs")
-        pet_box = (self.pet.x, self.pet.y, self.pet.pet_size[0], self.pet.pet_size[1])
+        c.delete("obs")
+        pet_box = DashRules.pet_hitbox(self.pet.x, self.pet.y,
+                                       self.pet.pet_size[0], self.pet.pet_size[1])
         hit = None
         for ob in self._obstacles:
             ob["x"] -= self._speed
@@ -167,19 +171,15 @@ class DashRunGame(BaseGame):
         c = self._canvas
         if not c:
             return
-        fill = cfg.C_WOOD
-        if ob["kind"] == "high":
-            fill = cfg.C_ROSE_DEEP
-        elif ob["kind"] == "flyer":
-            fill = cfg.C_SKY_DEEP
-        c.create_rectangle(ob["x"], ob["y"], ob["x"] + ob["w"], ob["y"] + ob["h"],
-                           fill=fill, outline="", tags="obs")
-        if ob["kind"] == "flyer":
-            c.create_text(ob["x"] + ob["w"] // 2, ob["y"] - 14,
-                          text="🐦", font=("Segoe UI Emoji", 16), tags="obs")
-        elif ob["kind"] in ("low", "double"):
+        style = _KIND_STYLE.get(ob["kind"], _KIND_STYLE["hurdle"])
+        c.create_rounded_rectangle(ob["x"], ob["y"], ob["x"] + ob["w"], ob["y"] + ob["h"],
+                                   radius=6, fill=style["color"], outline="", tags="obs")
+        if ob["kind"] == "bird":
+            c.create_text(ob["x"] + ob["w"] // 2, ob["y"] + ob["h"] // 2,
+                          text=style["emoji"], font=("Segoe UI Emoji", 18), tags="obs")
+        else:
             c.create_text(ob["x"] + ob["w"] // 2, ob["y"] - 12,
-                          text="🚧", font=("Segoe UI Emoji", 14), tags="obs")
+                          text=style["emoji"], font=("Segoe UI Emoji", 16), tags="obs")
 
     def _draw_ground(self) -> None:
         c = self._canvas
