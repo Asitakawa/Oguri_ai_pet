@@ -13,7 +13,7 @@ description: 管理安排表。支持查看（表格/时间线/今日/搜索）�
 | hour | number | 否 | 小时 0-23 |
 | minute | number | 否 | 分钟 0-59 |
 | days | string | 否 | daily/weekdays/weekend/空（一次） |
-| number | number | 否 | 编号，delete/done 时使用 |
+| number | number | 否 | 编号，delete/done 时使用；传 all 可删除/完成全部安排 |
 | keyword | string | 否 | 搜索关键词，search 时使用 |
 | tag | string | 否 | 标签：work/personal/health |
 
