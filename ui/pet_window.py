@@ -16,6 +16,7 @@ from core.chat_history import ChatHistoryManager
 from core.paths import get_data_path, get_resource_path
 from core.pet_state import PetStatus
 from core.reminder import ScheduleManager
+from core.web_server import ManagementServer
 from core.skill_system.manager import SkillManager
 from game import GameManager
 from ui.animations import AnimationMixin
@@ -46,6 +47,8 @@ class KurumiPet(AnimationMixin):
         self.sprite = PetSprite(self)
         self.input_bar = InputBar(self)
         self.status = PetStatus()
+        self.web_server = ManagementServer(self)
+        self.web_server.start()
         self._activate_status_callbacks()
         self._init_monitoring()
         self._init_window()
@@ -591,6 +594,8 @@ class KurumiPet(AnimationMixin):
         self.chat_history.save(sync=True)
         self.schedule_manager.stop()
         self.status.stop()
+        if getattr(self, "web_server", None):
+            self.web_server.stop()
         args = [sys.executable]
         if not getattr(sys, "frozen", False):
             args.append(os.path.abspath("main.py"))
@@ -608,6 +613,8 @@ class KurumiPet(AnimationMixin):
         self.running = False
         self.stop_all_animations()
         self.status.stop()
+        if getattr(self, "web_server", None):
+            self.web_server.stop()
         self.schedule_manager.stop()
         self.chat_history.save(sync=True)
 

@@ -1,11 +1,14 @@
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/layout.css";
-import { createStore, initialMockState } from "./store";
+import { createStore, initialState } from "./store";
 import { createRouter } from "./router";
 import { routes, type Ctx } from "./views";
+import { api, initToken, openStatusStream } from "./api/client";
 
-const store = createStore(initialMockState);
+initToken();
+
+const store = createStore(initialState);
 const app = document.getElementById("app");
 if (!app) throw new Error("#app not found");
 
@@ -14,7 +17,7 @@ app.innerHTML = `
     <aside class="sidebar">
       <div class="sidebar-brand"><span class="brand-dot"></span><span>小栗帽管理面板</span></div>
       <nav class="nav" id="nav"></nav>
-      <div class="sidebar-foot">v0.1 · 阶段 1</div>
+      <div class="sidebar-foot">v0.2 · 阶段 2</div>
     </aside>
     <div class="main">
       <header class="topbar">
@@ -22,7 +25,7 @@ app.innerHTML = `
         <div class="topbar-status">
           <div class="mini-bar"><span>饱腹</span><div class="mini-track"><div class="mini-fill rose" id="mini-hunger"></div></div></div>
           <div class="mini-bar"><span>活力</span><div class="mini-track"><div class="mini-fill sky" id="mini-energy"></div></div></div>
-          <span class="live-dot" title="桌宠在线（阶段 1 mock）"></span>
+          <span class="live-dot" title="桌宠连接状态"></span>
         </div>
       </header>
       <main class="content" id="view-root"></main>
@@ -39,8 +42,31 @@ const ctx: Ctx = { store, navigate: () => {}, root: viewRoot };
 const router = createRouter(viewRoot, routes, ctx);
 ctx.navigate = (h) => router.navigate(h);
 
+const dot = document.querySelector<HTMLElement>(".live-dot");
+const syncConnected = (v: boolean) => {
+  store.setState({ connected: v });
+  if (dot) dot.classList.toggle("offline", !v);
+};
+
+const closeStream = openStatusStream(
+  (s) => {
+    store.setState({ ...s, connected: true });
+    syncConnected(true);
+  },
+  () => syncConnected(false),
+);
+window.addEventListener("beforeunload", () => closeStream());
+
+void api
+  .getStatus()
+  .then((s) => {
+    store.setState({ ...s, connected: true });
+    syncConnected(true);
+  })
+  .catch(() => syncConnected(false));
+
 const syncMini = () => {
-  const s = store.getState().status;
+  const s = store.getState();
   const h = document.getElementById("mini-hunger");
   const e = document.getElementById("mini-energy");
   if (h) h.style.width = `${s.hunger}%`;

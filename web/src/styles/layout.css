@@ -163,3 +163,9 @@
   .dash-hero { flex-direction: column; align-items: flex-start; }
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
 }
+/* ========== 连接状态 ========== */
+.live-dot.offline {
+  background: var(--c-ash-dark);
+  box-shadow: 0 0 0 4px var(--c-ash-light);
+  animation: none;
+}

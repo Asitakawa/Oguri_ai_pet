@@ -10,6 +10,8 @@ export function createRouter(
   routes: Record<string, View>,
   ctx: Ctx,
 ): Router {
+  let mounted: View | null = null;
+
   const resolve = (): string => {
     const h = location.hash.replace(/^#\/?/, "");
     return h in routes ? h : "dashboard";
@@ -18,6 +20,10 @@ export function createRouter(
   const render = () => {
     const id = resolve();
     const view = routes[id];
+    if (mounted !== view) {
+      mounted?.unmount?.(ctx);
+      mounted = view;
+    }
     root.innerHTML = view.render(ctx);
     view.mount?.(ctx);
     document.querySelectorAll<HTMLElement>("[data-route]").forEach((el) => {

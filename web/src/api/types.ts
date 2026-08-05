@@ -3,6 +3,18 @@ export interface PetStatus {
   energy: number;
 }
 
+export interface StatusPayload {
+  hunger: number;
+  energy: number;
+  chatRounds: number;
+  uptimeSec: number;
+  enabledSkills: number;
+  totalSkills: number;
+  sysCpu: number | null;
+  sysMemMB: number | null;
+  petOnline: boolean;
+}
+
 export interface ChatMessage {
   role: "user" | "pet";
   content: string;

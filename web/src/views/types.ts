@@ -12,4 +12,5 @@ export interface View {
   icon: string;
   render(ctx: Ctx): string;
   mount?(ctx: Ctx): void;
+  unmount?(ctx: Ctx): void;
 }

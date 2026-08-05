@@ -1,27 +1,20 @@
-export interface PetStatus {
-  hunger: number;
-  energy: number;
+import type { StatusPayload } from "./api/types";
+
+export interface AppState extends StatusPayload {
+  connected: boolean;
 }
 
-export interface AppState {
-  status: PetStatus;
-  chatRounds: number;
-  uptimeSec: number;
-  enabledSkills: number;
-  totalSkills: number;
-  sysCpu: number;
-  sysMemGB: number;
-}
-
-// 阶段 1：mock 初始状态；阶段 2 起由真实 API 填充
-export const initialMockState: AppState = {
-  status: { hunger: 72, energy: 55 },
-  chatRounds: 128,
-  uptimeSec: 3 * 3600 + 42 * 60,
-  enabledSkills: 2,
-  totalSkills: 2,
-  sysCpu: 8,
-  sysMemGB: 3.2,
+export const initialState: AppState = {
+  hunger: 50,
+  energy: 50,
+  chatRounds: 0,
+  uptimeSec: 0,
+  enabledSkills: 0,
+  totalSkills: 0,
+  sysCpu: null,
+  sysMemMB: null,
+  petOnline: false,
+  connected: false,
 };
 
 export type Listener = () => void;
