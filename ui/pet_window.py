@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+import webbrowser
 import tkinter as tk
 from tkinter import Menu, messagebox
 
@@ -159,36 +160,21 @@ class KurumiPet(AnimationMixin):
                              bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
                              activeforeground=cfg.C_WOOD, relief='flat', bd=0)
 
-        m.add_command(label="💬 对话", command=self.input_bar.show)
-        m.add_command(label="🍙 喂饭团", command=self._feed_pet)
+        # 管理面板入口（阶段 5）
+        m.add_command(label="⚡ 打开管理面板", command=self._open_management_panel)
         m.add_separator()
 
-        sub = Menu(m, tearoff=0, font=(cfg.FONT_FAMILY, 10),
-                   bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
-                   activeforeground=cfg.C_WOOD, relief='flat', bd=0)
-        sub.add_command(label="📊 查看状态", command=self._toggle_status_bar)
-        sub.add_command(label="📋 聊天记录", command=self.dialogs.show_chat_history)
-        sub.add_command(label="🗑 清空记录", command=self._clear_chat_history)
-        m.add_cascade(label="📋 记录", menu=sub)
+        m.add_command(label="💬 对话", command=self.input_bar.show)
+        m.add_command(label="🍙 喂饭团", command=self._feed_pet)
+        m.add_command(label="📊 查看状态", command=self._toggle_status_bar)
+        m.add_separator()
 
-        sub = Menu(m, tearoff=0, font=(cfg.FONT_FAMILY, 10),
-                   bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
-                   activeforeground=cfg.C_WOOD, relief='flat', bd=0)
-        sub.add_command(label="📏 调整大小", command=self.dialogs.show_size_menu)
-        sub.add_command(label="⚡ 技能管理", command=self.dialogs.show_skill_manager)
-        sub.add_command(label="🔑 API 设置", command=self.dialogs.show_api_settings)
-        sub.add_command(label="🔤 字体设置", command=self.dialogs.show_font_settings)
-        sub.add_command(label="⚙ 系统设置", command=self.dialogs.show_settings)
-        m.add_cascade(label="⚙ 设置", menu=sub)
-
-        # 小游戏子菜单
+        # 小游戏子菜单：仅保留直接游玩与退出（开关交给管理页）
         gsub = Menu(m, tearoff=0, font=(cfg.FONT_FAMILY, 10),
                     bg=cfg.C_BG, fg=cfg.C_TEXT, activebackground=cfg.C_CREAM,
                     activeforeground=cfg.C_WOOD, relief='flat', bd=0)
-        gsub.add_command(label="🎮 游戏管理", command=self.dialogs.show_game_manager)
         enabled = self.game_manager.list_enabled()
         if enabled:
-            gsub.add_separator()
             for key, gname in enabled:
                 gsub.add_command(label=gname, command=lambda k=key: self._toggle_game(k))
         if self.game_manager.is_active():
@@ -199,6 +185,19 @@ class KurumiPet(AnimationMixin):
         m.add_separator()
         m.add_command(label="🔄 重启", command=self.restart)
         m.add_command(label="🚪 退出", command=self.quit)
+
+    def _open_management_panel(self):
+        ws = getattr(self, "web_server", None)
+        if ws is None or getattr(ws, "_httpd", None) is None:
+            self.show_talk("管理面板未启动，请重启桌宠后再试")
+            self.root.after(2500, self.hide_talk)
+            return
+        try:
+            webbrowser.open(ws.url())
+        except Exception as e:
+            print(f"打开管理面板失败: {e}")
+            self.show_talk("打开管理面板失败")
+            self.root.after(2500, self.hide_talk)
 
     def _toggle_game(self, key):
         if self.game_manager.is_active():
