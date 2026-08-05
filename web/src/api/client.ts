@@ -86,7 +86,7 @@ export const api = {
   testApi(p: { provider: string; model: string; apiKey: string }): Promise<{ ok: boolean; message: string }> {
     return request("/api/settings/api/test", { method: "POST", body: JSON.stringify(p) });
   },
-  saveSystem(s: SettingsPayload["system"]): Promise<{ ok: boolean }> {
+  saveSystem(s: Partial<SettingsPayload["system"]>): Promise<{ ok: boolean }> {
     return request("/api/settings/system", { method: "POST", body: JSON.stringify(s) });
   },
   setPetSize(scale: number): Promise<{ ok: boolean }> {

@@ -620,3 +620,19 @@ input[type="range"] { accent-color: var(--c-mint-deep); }
   .term-head { flex-wrap: wrap; }
   .term-tools { width: 100%; justify-content: flex-end; }
 }
+
+/* ========== 聊天记忆 ========== */
+.mem-hint {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--c-ash-dark);
+  background: rgba(255, 254, 251, 0.5);
+  border: 1px dashed var(--glass-border-strong);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.mem-hint b {
+  color: var(--c-mint-deep);
+  font-weight: 700;
+}

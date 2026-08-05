@@ -80,13 +80,27 @@ export const Settings: View = {
       </section>
 
       <section class="glass-card">
+        <header class="card-head"><span class="card-icon">🧠</span><h3>聊天记忆</h3></header>
+        <div class="form-grid">
+          <label>记忆轮数
+            <input id="mem-rounds" class="input" type="number" min="5" max="250" />
+          </label>
+        </div>
+        <p class="mem-hint">AI 对话时会把最近 <b id="mem-current">—</b> 轮对话（每轮含一问一答）作为上下文背景。轮数越多小栗帽越记得之前的聊天，但消耗的 token 也越多。范围 5–250 轮。</p>
+        <div class="row-end">
+          <span class="form-msg" id="mem-msg"></span>
+          <button class="btn" data-action="mem-default">↺ 恢复默认</button>
+          <button class="btn btn-primary" data-action="mem-save">💾 保存</button>
+        </div>
+      </section>
+
+      <section class="glass-card">
         <header class="card-head"><span class="card-icon">⚙</span><h3>系统设置</h3></header>
-        <div class="form-grid cols-3">
+        <div class="form-grid cols-2">
           <label>AI 最短间隔(s)<input id="sys-min" class="input" type="number" /></label>
           <label>AI 最长间隔(s)<input id="sys-max" class="input" type="number" /></label>
           <label>预设最短间隔(s)<input id="sys-pmin" class="input" type="number" /></label>
           <label>预设最长间隔(s)<input id="sys-pmax" class="input" type="number" /></label>
-          <label>记忆轮数<input id="sys-mem" class="input" type="number" /></label>
         </div>
         <div class="row-end">
           <span class="form-msg" id="sys-msg"></span>
@@ -213,26 +227,25 @@ export const Settings: View = {
     });
 
     // ---- 系统 ----
-    const sysMap = {
+    type SysIntervals = Pick<SettingsPayload["system"], "minAutoReply" | "maxAutoReply" | "presetMin" | "presetMax">;
+    const sysMap: Record<keyof SysIntervals, string> = {
       minAutoReply: "sys-min",
       maxAutoReply: "sys-max",
       presetMin: "sys-pmin",
       presetMax: "sys-pmax",
-      memoryRounds: "sys-mem",
-    } as const;
+    };
     (Object.keys(sysMap) as (keyof typeof sysMap)[]).forEach((k) => {
       const inp = el<HTMLInputElement>(sysMap[k]);
       if (inp) inp.value = String(s.system[k]);
     });
-    const readSys = () => ({
+    const readSys = (): SysIntervals => ({
       minAutoReply: Number(el<HTMLInputElement>("sys-min")?.value ?? 0),
       maxAutoReply: Number(el<HTMLInputElement>("sys-max")?.value ?? 0),
       presetMin: Number(el<HTMLInputElement>("sys-pmin")?.value ?? 0),
       presetMax: Number(el<HTMLInputElement>("sys-pmax")?.value ?? 0),
-      memoryRounds: Number(el<HTMLInputElement>("sys-mem")?.value ?? 0),
     });
-    const setSys = (v: SettingsPayload["system"]) => {
-      (Object.keys(sysMap) as (keyof typeof sysMap)[]).forEach((k) => {
+    const setSys = (v: SysIntervals) => {
+      (Object.keys(sysMap) as (keyof SysIntervals)[]).forEach((k) => {
         const inp = el<HTMLInputElement>(sysMap[k]);
         if (inp) inp.value = String(v[k]);
       });
@@ -246,8 +259,39 @@ export const Settings: View = {
       }
     });
     ctx.root.querySelector("[data-action='sys-default']")?.addEventListener("click", () => {
-      setSys({ minAutoReply: 60, maxAutoReply: 300, presetMin: 120, presetMax: 600, memoryRounds: 200 });
+      setSys({ minAutoReply: 60, maxAutoReply: 300, presetMin: 120, presetMax: 600 });
       setMsg("sys-msg", "已填入默认值，记得点保存", true);
+    });
+
+    // ---- 聊天记忆 ----
+    const memInput = el<HTMLInputElement>("mem-rounds")!;
+    const memCurrent = el("mem-current");
+    memInput.min = "5";
+    memInput.max = "250";
+    memInput.value = String(s.system.memoryRounds);
+    if (memCurrent) memCurrent.textContent = String(s.system.memoryRounds);
+    const updMemPreview = () => {
+      if (memCurrent) memCurrent.textContent = memInput.value || "—";
+    };
+    memInput.addEventListener("input", updMemPreview);
+    ctx.root.querySelector("[data-action='mem-save']")?.addEventListener("click", async () => {
+      const v = Number(memInput.value);
+      if (!Number.isFinite(v) || v < 5 || v > 250) {
+        setMsg("mem-msg", "请输入 5–250 之间的整数", false);
+        return;
+      }
+      try {
+        await api.saveSystem({ memoryRounds: v });
+        setMsg("mem-msg", "已保存并即时生效", true);
+        updMemPreview();
+      } catch (e) {
+        setMsg("mem-msg", errMsg(e), false);
+      }
+    });
+    ctx.root.querySelector("[data-action='mem-default']")?.addEventListener("click", () => {
+      memInput.value = "200";
+      updMemPreview();
+      setMsg("mem-msg", "已填入默认值 200 轮，记得点保存", true);
     });
 
     // ---- 进程 ----
