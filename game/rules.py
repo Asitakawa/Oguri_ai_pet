@@ -19,10 +19,10 @@ class CatchRules:
     """接饭团：掉落物生成、接取判定、得分分档。"""
 
     BASE_VY = 6.0         # px/帧（33ms ≈ 180px/s）
-    BASE_INTERVAL = 1.2   # 秒
+    BASE_INTERVAL = 1.0   # 秒
     MIN_INTERVAL = 0.5
     MAX_ITEMS = 5
-    SPEEDUP_EVERY = 15    # 秒
+    SPEEDUP_EVERY = 10    # 秒
     SPEEDUP_FACTOR = 1.1
 
     @staticmethod
@@ -45,13 +45,13 @@ class CatchRules:
 
     @staticmethod
     def score_tier(score: int) -> str:
-        if score < 20:
+        if score < 8:
             return "今天的饭团…都在躲着我"
-        if score < 40:
+        if score < 12:
             return "肚子只有三分饱"
-        if score < 60:
+        if score < 16:
             return "刚刚好，还能再跑一圈"
-        if score < 80:
+        if score < 20:
             return "吃得很满足了！"
         return "大丰收！今晚不用做饭了！"
 

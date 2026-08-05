@@ -26,10 +26,11 @@ def test_catch_pick_item_valid():
 
 def test_catch_score_tier():
     assert "躲着我" in CatchRules.score_tier(0)
-    assert "三分饱" in CatchRules.score_tier(30)
-    assert "跑一圈" in CatchRules.score_tier(50)
-    assert "很满足" in CatchRules.score_tier(70)
-    assert "大丰收" in CatchRules.score_tier(90)
+    assert "躲着我" in CatchRules.score_tier(7)
+    assert "三分饱" in CatchRules.score_tier(10)
+    assert "跑一圈" in CatchRules.score_tier(14)
+    assert "很满足" in CatchRules.score_tier(18)
+    assert "大丰收" in CatchRules.score_tier(22)
 
 
 # ── 大胃王速吃 ──────────────────────────

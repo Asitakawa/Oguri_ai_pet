@@ -30,7 +30,7 @@ class OnigiriCatchGame(BaseGame):
     NAME = "接饭团"
     DESCRIPTION = "移动桌宠，接住从天而降的饭团！"
     RULE_TEXT = "训练员，饭团掉下来了！移动我来接住它们！（空格暂停）"
-    GAME_SECONDS = 60
+    GAME_SECONDS = 30
     BOTTOM_MARGIN = 60      # 桌宠底部与屏幕底的间距（避开任务栏）
     FOLLOW_LERP = 0.35      # 指针跟随平滑系数（每帧逼近比例）
     FLOAT_LIFE = 0.7        # 飘字存活秒数
