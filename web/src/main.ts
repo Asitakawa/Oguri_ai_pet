@@ -5,6 +5,7 @@ import { createStore, initialState } from "./store";
 import { createRouter } from "./router";
 import { routes, type Ctx } from "./views";
 import { api, initToken, openStatusStream } from "./api/client";
+import type { StatusPayload } from "./api/types";
 
 initToken();
 
@@ -28,6 +29,10 @@ app.innerHTML = `
           <span class="live-dot" title="桌宠连接状态"></span>
         </div>
       </header>
+      <div class="conn-banner" id="conn-banner" hidden>
+        ⚠ 未连接到桌宠服务：请确认桌宠正在运行。桌宠每次启动地址/token 都会变化，
+        若已重启，请用桌宠启动日志中打印的新地址重新打开本页。
+      </div>
       <main class="content" id="view-root"></main>
     </div>
   </div>`;
@@ -43,27 +48,58 @@ const router = createRouter(viewRoot, routes, ctx);
 ctx.navigate = (h) => router.navigate(h);
 
 const dot = document.querySelector<HTMLElement>(".live-dot");
+const banner = document.getElementById("conn-banner");
 const syncConnected = (v: boolean) => {
   store.setState({ connected: v });
   if (dot) dot.classList.toggle("offline", !v);
+  if (banner) banner.hidden = v;
+};
+
+const applyStatus = (s: StatusPayload) => {
+  store.setState({ ...s, connected: true });
+  syncConnected(true);
+};
+
+// 断线自愈：连接失败时每 3s 重试一次 status，桌宠（同 token）恢复后自动上线
+let retryTimer: number | undefined;
+const startRetry = () => {
+  if (retryTimer !== undefined) return;
+  retryTimer = window.setInterval(() => {
+    api.getStatus().then(applyStatus).catch(() => { /* 继续重试 */ });
+  }, 3000);
+};
+const stopRetry = () => {
+  if (retryTimer !== undefined) {
+    window.clearInterval(retryTimer);
+    retryTimer = undefined;
+  }
+};
+
+const onConnected = () => {
+  syncConnected(true);
+  stopRetry();
+};
+const onDisconnected = () => {
+  syncConnected(false);
+  startRetry();
 };
 
 const closeStream = openStatusStream(
   (s) => {
-    store.setState({ ...s, connected: true });
-    syncConnected(true);
+    applyStatus(s);
+    onConnected();
   },
-  () => syncConnected(false),
+  () => onDisconnected(),
 );
 window.addEventListener("beforeunload", () => closeStream());
 
-void api
+api
   .getStatus()
   .then((s) => {
-    store.setState({ ...s, connected: true });
-    syncConnected(true);
+    applyStatus(s);
+    onConnected();
   })
-  .catch(() => syncConnected(false));
+  .catch(() => onDisconnected());
 
 const syncMini = () => {
   const s = store.getState();

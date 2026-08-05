@@ -27,7 +27,7 @@ export const Dashboard: View = {
         <div class="dash-hero-left">${petAvatarHTML()}</div>
         <div class="dash-hero-mid">
           <h2>你好，训练员</h2>
-          <p class="dash-sub">${s.petOnline ? "小栗帽在线，状态实时同步中" : "桌宠未运行或连接断开"}</p>
+          <p class="dash-sub">${s.connected ? "小栗帽在线，状态实时同步中" : "未连接桌宠（可能已退出或重启）"}</p>
           <div class="quick-actions">
             <button class="btn btn-primary" data-action="feed">🍙 喂饭团</button>
             <button class="btn" data-action="chat">💬 打开聊天</button>
@@ -50,7 +50,7 @@ export const Dashboard: View = {
         ${cardHTML("进程", `
           <div class="stat-grid">
             <div class="stat"><b>${mem}</b><span>内存占用</span></div>
-            <div class="stat"><b>${s.petOnline ? "在线" : "离线"}</b><span>桌宠连接</span></div>
+            <div class="stat"><b>${s.connected ? "在线" : "离线"}</b><span>桌宠连接</span></div>
           </div>`, { icon: "🖥️" })}
       </section>
     </div>`;

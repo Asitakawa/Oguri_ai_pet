@@ -169,3 +169,14 @@
   box-shadow: 0 0 0 4px var(--c-ash-light);
   animation: none;
 }
+/* ========== 连接提示条 ========== */
+.conn-banner {
+  margin: 16px 24px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--c-rose-deep);
+  border-radius: var(--radius-md);
+  background: var(--c-rose);
+  color: var(--c-wood);
+  font-size: 13px;
+  line-height: 1.6;
+}
