@@ -1,7 +1,7 @@
 /* ============================================================
- * ??????????? OpenPets ?????????
- * ???????? + ???????? + ????? +
- *       ???? + ????? + ???
+ * 暖色玻璃拟态布局（参考 OpenPets 控制中心设计语言）
+ * 原则：柔和渐变底 + 半透明毛玻璃面板 + 圆润大圆角 + 
+ *       内发光线 + 深度柔阴影 + 微交互
  * ============================================================ */
 
 /* ========== Shell ========== */
@@ -57,7 +57,7 @@
   color: #fff;
   box-shadow: 0 8px 20px rgba(143, 180, 208, 0.35), var(--glass-inner-highlight);
 }
-/* ??????? active ?? */
+/* 五种路由各自的 active 渐变 */
 .nav-item.active[data-route="dashboard"] { background: var(--grad-primary); box-shadow: 0 8px 20px rgba(143, 180, 208, 0.35), var(--glass-inner-highlight); }
 .nav-item.active[data-route="chat"]      { background: var(--grad-mint);    box-shadow: 0 8px 20px rgba(147, 187, 170, 0.35), var(--glass-inner-highlight); }
 .nav-item.active[data-route="games"]     { background: var(--grad-rose);    box-shadow: 0 8px 20px rgba(210, 163, 150, 0.35), var(--glass-inner-highlight); }
@@ -110,7 +110,7 @@
 
 .content { padding: 24px 28px; }
 
-/* ========== ????? ========== */
+/* ========== 连接提示条 ========== */
 .conn-banner {
   margin: 16px 24px 0;
   padding: 10px 14px;
@@ -136,8 +136,8 @@
   box-shadow: var(--shadow-glass), var(--glass-inner-highlight);
   padding: 20px;
 }
-/* ???????????????????? */
-.glass-card:not(.chat-panel)::before {
+/* 顶部内发光线（聊天面板内容密集，不叠加） */
+.glass-card:not(.chat-panel):not(.dash-terminal)::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -208,7 +208,7 @@
   display: flex; align-items: center; gap: 28px;
   overflow: hidden;
 }
-/* ??????? */
+/* 装饰性彩色光斑 */
 .dash-hero::before {
   content: "";
   position: absolute;
@@ -308,7 +308,7 @@
 }
 .view-placeholder h2 { margin: 0; color: var(--c-text-strong); }
 
-/* ========== ???? ========== */
+/* ========== 通用表单 ========== */
 .input {
   font-family: var(--font-base);
   font-size: 14px;
@@ -347,7 +347,7 @@ input[type="range"] { accent-color: var(--c-mint-deep); }
 .view-settings { display: flex; flex-direction: column; gap: 20px; }
 .spacer { flex: 1; }
 
-/* ========== ?? / ?? ========== */
+/* ========== 徽章 / 开关 ========== */
 .badge {
   font-size: 11px; padding: 3px 10px; border-radius: 999px;
   background: rgba(189, 214, 200, 0.5);
@@ -386,7 +386,7 @@ input[type="range"] { accent-color: var(--c-mint-deep); }
 .switch input:checked + span::before { transform: translateX(18px); }
 .switch input:disabled + span { opacity: 0.5; cursor: not-allowed; }
 
-/* ========== ?? ========== */
+/* ========== 聊天 ========== */
 .view-chat { height: calc(100vh - 150px); }
 .chat-panel { display: flex; flex-direction: column; height: 100%; padding: 0; overflow: hidden; }
 .chat-toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--glass-border); background: rgba(255, 254, 251, 0.35); }
@@ -429,7 +429,7 @@ input[type="range"] { accent-color: var(--c-mint-deep); }
 }
 .chat-input-row .input { flex: 1; }
 
-/* ========== ?? ========== */
+/* ========== 游戏 ========== */
 .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
 .game-card {
   border: 1px solid var(--glass-border);
@@ -452,7 +452,7 @@ input[type="range"] { accent-color: var(--c-mint-deep); }
 .game-desc { margin: 0; font-size: 13px; color: var(--c-ash-dark); line-height: 1.5; min-height: 38px; }
 .game-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; }
 
-/* ========== ?? ========== */
+/* ========== 技能 ========== */
 .skill-list { display: flex; flex-direction: column; gap: 12px; }
 .skill-card {
   border: 1px solid var(--glass-border);
@@ -499,14 +499,14 @@ input[type="range"] { accent-color: var(--c-mint-deep); }
   max-height: 200px; overflow: auto;
 }
 
-/* ========== ???? ========== */
+/* ========== 视图过渡 ========== */
 #view-root > .view { animation: viewIn 0.28s ease both; }
 @keyframes viewIn {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: none; }
 }
 
-/* ========== ??????? ========== */
+/* ========== 状态环低值告警 ========== */
 .ring.low .ring-bar { stroke: var(--c-rose-deep); filter: drop-shadow(0 0 6px rgba(212, 169, 154, 0.8)); }
 .ring.low .ring-label { color: var(--c-rose-deep); font-weight: 600; }
 
@@ -527,9 +527,96 @@ input[type="range"] { accent-color: var(--c-mint-deep); }
   .form-grid.cols-3 { grid-template-columns: 1fr; }
 }
 
-/* ========== ???? ========== */
+/* ========== 实时终端 ========== */
 .live-dot.offline {
   background: var(--c-ash-dark);
   box-shadow: 0 0 0 4px rgba(184, 192, 204, 0.3);
   animation: none;
+}
+
+/* ========== Responsive ========== */
+.dash-terminal {
+  padding: 0;
+  overflow: hidden;
+  background: rgba(36, 33, 30, 0.72);
+  border-color: rgba(196, 168, 130, 0.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: 0 18px 44px rgba(139, 115, 85, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.term-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(196, 168, 130, 0.22);
+  background: rgba(255, 254, 251, 0.06);
+}
+.term-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 700; color: #f3ede5;
+  min-width: 0;
+}
+.term-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--c-mint-deep);
+  box-shadow: 0 0 8px rgba(155, 192, 174, 0.8);
+  animation: pulse 2.2s ease-out infinite;
+  flex-shrink: 0;
+}
+.term-dot.off {
+  background: var(--c-ash-dark);
+  box-shadow: none;
+  animation: none;
+}
+.term-conn {
+  font-size: 11px; font-weight: 400;
+  color: rgba(243, 237, 229, 0.55);
+  margin-left: 2px;
+}
+.term-tools { display: flex; gap: 8px; flex-shrink: 0; }
+.term-tools .btn {
+  background: rgba(255, 254, 251, 0.08);
+  border-color: rgba(196, 168, 130, 0.3);
+  color: rgba(243, 237, 229, 0.85);
+  box-shadow: none;
+  padding: 6px 12px;
+}
+.term-tools .btn:hover {
+  background: rgba(255, 254, 251, 0.16);
+  color: #fff;
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+.term-tools .btn.active {
+  background: rgba(232, 200, 192, 0.25);
+  border-color: rgba(212, 169, 154, 0.5);
+  color: #f3c8bd;
+}
+.term-body {
+  max-height: 320px;
+  overflow-y: auto;
+  transition: max-height 0.28s ease, opacity 0.22s ease;
+}
+.dash-terminal.collapsed .term-body {
+  max-height: 0;
+  opacity: 0;
+}
+.term-output {
+  padding: 10px 14px;
+  font-family: "Cascadia Code", "Consolas", "JetBrains Mono", "Microsoft YaHei", monospace;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.term-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: rgba(243, 237, 229, 0.82);
+}
+.term-line.info { color: rgba(184, 207, 224, 0.95); }
+.term-line.warn { color: rgba(228, 203, 183, 1); }
+.term-line.err { color: rgba(244, 170, 156, 1); }
+.term-line.debug { color: rgba(189, 214, 200, 0.8); }
+
+@media (max-width: 900px) {
+  .term-head { flex-wrap: wrap; }
+  .term-tools { width: 100%; justify-content: flex-end; }
 }

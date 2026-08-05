@@ -15,7 +15,7 @@ body {
   font-family: var(--font-base);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
-  /* ??????????? + ??/??/??????????? OpenPets ???? + 2025 ??????? */
+  /* 暖色玻璃背景：奶油基底 + 玫瑰/薄荷/天蓝三色径向光斑（参考 OpenPets 控制中心 + 2025 柔和渐变趋势） */
   background:
     radial-gradient(1100px 760px at 12% -10%, rgba(224, 200, 192, 0.34), transparent 60%),
     radial-gradient(1000px 700px at 108% 14%, rgba(189, 214, 200, 0.4), transparent 55%),
@@ -52,7 +52,7 @@ body {
   color: var(--c-ash-dark);
 }
 
-/* ???? */
+/* 细滚动条 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -68,7 +68,7 @@ body {
   background: rgba(184, 192, 204, 0.7);
 }
 
-/* ?????????? */
+/* 尊重系统减弱动效偏好 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

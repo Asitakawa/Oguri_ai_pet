@@ -1,4 +1,4 @@
-import type { ChatMessage, GameInfo, SkillDetail, SkillInfo, SettingsPayload } from "./types";
+import type { ChatMessage, GameInfo, LogPayload, SkillDetail, SkillInfo, SettingsPayload } from "./types";
 
 const TOKEN_KEY = "mgmt_token";
 
@@ -58,6 +58,9 @@ async function requestText(path: string, init: RequestInit = {}): Promise<string
 export const api = {
   getStatus() {
     return request<import("./types").StatusPayload>("/api/status");
+  },
+  getLogs(lines = 200): Promise<LogPayload> {
+    return request(`/api/logs?lines=${lines}`);
   },
   feed() {
     return request<import("./types").StatusPayload>("/api/pet/feed", { method: "POST" });
@@ -140,6 +143,26 @@ export function openStatusStream(
   es.addEventListener("status", (ev: MessageEvent) => {
     try {
       onStatus(JSON.parse(String(ev.data)) as import("./types").StatusPayload);
+    } catch {
+      /* ignore */
+    }
+  });
+  es.onerror = () => onError?.();
+  return () => es.close();
+}
+
+/** 实时终端日志流；返回关闭函数。offset 为起始字节位置（配合 /api/logs 初次拉取防丢行） */
+export function openLogStream(
+  onLog: (lines: string[]) => void,
+  onError?: () => void,
+  offset = 0,
+): () => void {
+  const token = getToken();
+  const es = new EventSource(`/api/logs/stream?token=${encodeURIComponent(token)}&offset=${offset}`);
+  es.addEventListener("log", (ev: MessageEvent) => {
+    try {
+      const data = JSON.parse(String(ev.data)) as { lines: string[] };
+      onLog(data.lines);
     } catch {
       /* ignore */
     }

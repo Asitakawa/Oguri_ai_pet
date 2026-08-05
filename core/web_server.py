@@ -26,7 +26,7 @@ from core.ai_providers import (
     save_api_settings,
     test_connection,
 )
-from core.paths import get_resource_path
+from core.paths import get_data_path, get_resource_path
 from utils.logger import get_logger
 
 log = get_logger("web_server")
@@ -381,6 +381,25 @@ class ManagementServer:
             if path == "/api/events":
                 self._handle_sse(handler)
                 return
+            if path == "/api/logs":
+                q = parse_qs(parsed.query)
+                try:
+                    lines = max(1, min(500, int(q.get("lines", ["200"])[0] or 200)))
+                except ValueError:
+                    lines = 200
+                self._send_json(
+                    handler, 200,
+                    {"lines": self._read_log_tail(lines), "offset": self._log_offset()},
+                )
+                return
+            if path == "/api/logs/stream":
+                q = parse_qs(parsed.query)
+                try:
+                    offset = max(0, int(q.get("offset", ["0"])[0] or 0))
+                except ValueError:
+                    offset = 0
+                self._handle_log_sse(handler, offset)
+                return
             if path == "/api/history":
                 q = parse_qs(parsed.query).get("q", [""])[0].strip()
                 msgs = (self.pet.chat_history.search(q)
@@ -616,6 +635,83 @@ class ManagementServer:
             self._send_json(handler, 200, {"ok": ok})
             return
         self._send_json(handler, 404, {"error": "not found"})
+
+    # ---------- ????????????? ----------
+    LOG_FILE = "kurumi.log"
+    _LOG_POLL = 0.4
+
+    def _log_file_path(self) -> str:
+        return os.path.join(os.path.dirname(get_data_path("x.log")), "logs", self.LOG_FILE)
+
+    def _log_offset(self) -> int:
+        try:
+            return os.path.getsize(self._log_file_path())
+        except OSError:
+            return 0
+
+    def _read_log_tail(self, lines: int = 200) -> List[str]:
+        path = self._log_file_path()
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, "rb") as f:
+                f.seek(0, 2)
+                size = f.tell()
+                if size == 0:
+                    return []
+                chunk = 4096
+                pos = size
+                buf = b""
+                while pos > 0 and buf.count(b"\n") < lines:
+                    read_start = max(0, pos - chunk)
+                    f.seek(read_start)
+                    buf = f.read(pos - read_start) + buf
+                    pos = read_start
+                text = buf.decode("utf-8", errors="replace")
+                return text.splitlines()[-lines:]
+        except OSError:
+            return []
+
+    def _read_log_new(self, offset: int) -> "tuple[List[str], int]":
+        path = self._log_file_path()
+        if not os.path.exists(path):
+            return [], 0
+        try:
+            size = os.path.getsize(path)
+            if size < offset:
+                # ??????????????????
+                with open(path, "rb") as f:
+                    data = f.read()
+                lines = data.decode("utf-8", errors="replace").splitlines()
+                return ["[???????????????]"] + lines, size
+            if size == offset:
+                return [], offset
+            with open(path, "rb") as f:
+                f.seek(offset)
+                data = f.read(size - offset)
+            lines = data.decode("utf-8", errors="replace").splitlines()
+            return lines, size
+        except OSError:
+            return [], offset
+
+    def _handle_log_sse(self, handler: BaseHTTPRequestHandler, offset: int) -> None:
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/event-stream")
+        handler.send_header("Cache-Control", "no-cache")
+        handler.send_header("Connection", "keep-alive")
+        handler.end_headers()
+        try:
+            while True:
+                lines, offset = self._read_log_new(offset)
+                if lines:
+                    data = json.dumps({"lines": lines, "offset": offset}, ensure_ascii=False)
+                    handler.wfile.write(f"event: log\ndata: {data}\n\n".encode("utf-8"))
+                else:
+                    handler.wfile.write(b": ping\n\n")
+                handler.wfile.flush()
+                time.sleep(self._LOG_POLL)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
 
     def _handle_sse(self, handler: BaseHTTPRequestHandler) -> None:
         handler.send_response(200)

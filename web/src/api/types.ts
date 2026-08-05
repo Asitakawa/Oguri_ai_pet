@@ -81,3 +81,7 @@ export interface SkillDetail extends SkillInfo {
   parameters: SkillParam[];
   skillMd: string;
 }
+export interface LogPayload {
+  lines: string[];
+  offset: number;
+}
