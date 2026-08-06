@@ -44,7 +44,7 @@ export const Dashboard: View = {
       <section class="dash-stats">
         ${cardHTML("陪伴统计", `
           <div class="stat-grid">
-            <div class="stat"><b>${s.chatRounds}</b><span>累计聊天轮</span></div>
+            <div class="stat"><b data-count="${s.chatRounds}">${s.chatRounds}</b><span>累计聊天轮</span></div>
             <div class="stat"><b>${fmtUptime(s.uptimeSec)}</b><span>本次运行</span></div>
             <div class="stat"><b>${s.enabledSkills}/${s.totalSkills}</b><span>已启用技能</span></div>
             <div class="stat"><b>${cpu}</b><span>CPU</span></div>
@@ -75,8 +75,9 @@ export const Dashboard: View = {
     </div>`;
   },
   mount(ctx) {
-    gsap.from(".dash-hero", { opacity: 0, y: 24, duration: 0.5, ease: "power2.out" });
-    gsap.from(".dash-stats .glass-card", { opacity: 0, y: 16, duration: 0.4, delay: 0.15, ease: "power2.out" });
+    gsap.from(".dash-hero", { opacity: 0, y: 32, scale: 0.97, duration: 0.6, ease: "back.out(1.4)" });
+    gsap.from(".dash-hero-left", { opacity: 0, scale: 0.8, duration: 0.6, delay: 0.12, ease: "back.out(1.6)" });
+    gsap.from(".dash-stats .glass-card", { opacity: 0, y: 22, duration: 0.5, delay: 0.25, stagger: 0.12, ease: "back.out(1.2)" });
 
     // ---- 实时终端 ----
     gsap.from(".dash-terminal", { opacity: 0, y: 16, duration: 0.4, delay: 0.2, ease: "power2.out" });
@@ -160,10 +161,31 @@ export const Dashboard: View = {
       if (termOut) termOut.innerHTML = "";
     });
 
+    // ---- 数字滚动动画 ----
+    const animateCount = (el: HTMLElement, to: number, dur = 0.8) => {
+      const obj = { v: 0 };
+      gsap.to(obj, {
+        v: to,
+        duration: dur,
+        ease: "power2.out",
+        onUpdate: () => {
+          el.textContent = String(Math.round(obj.v));
+        },
+      });
+    };
+    document.querySelectorAll<HTMLElement>("[data-count]").forEach((el) => {
+      animateCount(el, Number(el.dataset.count ?? 0));
+    });
+
     unsub = ctx.store.subscribe(() => {
       const s = ctx.store.getState();
       ringUpdate("ring-hunger", s.hunger);
       ringUpdate("ring-energy", s.energy);
+      const cntEl = document.querySelector<HTMLElement>("[data-count]");
+      if (cntEl && s.chatRounds !== Number(cntEl.dataset.count)) {
+        cntEl.dataset.count = String(s.chatRounds);
+        animateCount(cntEl, s.chatRounds, 0.6);
+      }
       document.getElementById("ring-hunger-wrap")?.classList.toggle("low", s.hunger < 30);
       document.getElementById("ring-energy-wrap")?.classList.toggle("low", s.energy < 25);
     });

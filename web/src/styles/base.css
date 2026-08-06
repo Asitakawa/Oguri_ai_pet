@@ -25,9 +25,49 @@ body {
   min-height: 100vh;
 }
 
+/* 动态背景光斑：缓慢漂移的模糊光球增强立体与动感 */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  width: 72vmax;
+  height: 72vmax;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(72px);
+  opacity: 0.55;
+  will-change: transform;
+}
+body::before {
+  top: -22vmax;
+  left: -14vmax;
+  background: radial-gradient(circle, rgba(224, 200, 192, 0.6), transparent 65%);
+  animation: drift-a 26s ease-in-out infinite alternate;
+}
+body::after {
+  bottom: -26vmax;
+  right: -16vmax;
+  background: radial-gradient(circle, rgba(184, 207, 224, 0.55), transparent 65%);
+  animation: drift-b 32s ease-in-out infinite alternate;
+}
+@keyframes drift-a {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(8vmax, 6vmax, 0) scale(1.14); }
+  100% { transform: translate3d(-4vmax, 10vmax, 0) scale(0.94); }
+}
+@keyframes drift-b {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(-9vmax, -7vmax, 0) scale(1.16); }
+  100% { transform: translate3d(5vmax, -12vmax, 0) scale(0.9); }
+}
+
 #app {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
 }
+
 
 .boot {
   min-height: 100vh;

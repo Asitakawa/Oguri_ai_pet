@@ -41,6 +41,15 @@
   --grad-rose: linear-gradient(135deg, #efd0c8, #d2a396);
   --grad-wood: linear-gradient(135deg, #cfb691, #8b7355);
 
+  /* 立体阴影 / 高光（增强深度与悬浮感） */
+  --shadow-3d: 0 1px 2px rgba(139, 115, 85, 0.08), 0 10px 24px rgba(139, 115, 85, 0.12), 0 28px 56px rgba(139, 115, 85, 0.16);
+  --shadow-3d-hover: 0 2px 4px rgba(139, 115, 85, 0.1), 0 16px 34px rgba(139, 115, 85, 0.18), 0 44px 88px rgba(139, 115, 85, 0.24);
+  --shadow-btn: 0 2px 0 rgba(139, 115, 85, 0.32), 0 8px 18px rgba(139, 115, 85, 0.18);
+  --shadow-btn-hover: 0 3px 0 rgba(139, 115, 85, 0.28), 0 12px 26px rgba(139, 115, 85, 0.22);
+  --shadow-btn-active: 0 1px 0 rgba(139, 115, 85, 0.22), 0 2px 6px rgba(139, 115, 85, 0.12);
+  --inset-deep: inset 0 2px 6px rgba(139, 115, 85, 0.14);
+  --highlight-line: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+
   /* 圆角 / 字体 */
   --radius-sm: 10px;
   --radius-md: 16px;
