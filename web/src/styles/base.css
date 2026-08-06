@@ -15,17 +15,19 @@ body {
   font-family: var(--font-base);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
-  /* 暖色玻璃背景：奶油基底 + 玫瑰/薄荷/天蓝三色径向光斑（参考 OpenPets 控制中心 + 2025 柔和渐变趋势） */
+  /* 深色工业底：炭灰渐变 + 细网格纹理 */
   background:
-    radial-gradient(1100px 760px at 12% -10%, rgba(224, 200, 192, 0.34), transparent 60%),
-    radial-gradient(1000px 700px at 108% 14%, rgba(189, 214, 200, 0.4), transparent 55%),
-    radial-gradient(960px 880px at 48% 122%, rgba(184, 207, 224, 0.34), transparent 60%),
-    linear-gradient(160deg, #f8f6f2 0%, #f5efe8 46%, #eef4ee 100%);
+    radial-gradient(1100px 760px at 12% -10%, rgba(240, 163, 94, 0.05), transparent 60%),
+    radial-gradient(1000px 700px at 108% 14%, rgba(95, 208, 200, 0.05), transparent 55%),
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(160deg, #0b0d10 0%, #101318 48%, #14181e 100%);
+  background-size: auto, auto, 44px 44px, 44px 44px, auto;
   background-attachment: fixed;
   min-height: 100vh;
 }
 
-/* 动态背景光斑：缓慢漂移的模糊光球增强立体与动感 */
+/* 动态光斑：暗色低饱和漂移，工业氛围 */
 body::before,
 body::after {
   content: "";
@@ -35,25 +37,25 @@ body::after {
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;
-  filter: blur(72px);
-  opacity: 0.55;
+  filter: blur(90px);
+  opacity: 0.5;
   will-change: transform;
 }
 body::before {
   top: -22vmax;
   left: -14vmax;
-  background: radial-gradient(circle, rgba(224, 200, 192, 0.6), transparent 65%);
-  animation: drift-a 26s ease-in-out infinite alternate;
+  background: radial-gradient(circle, rgba(240, 163, 94, 0.1), transparent 65%);
+  animation: drift-a 30s ease-in-out infinite alternate;
 }
 body::after {
   bottom: -26vmax;
   right: -16vmax;
-  background: radial-gradient(circle, rgba(184, 207, 224, 0.55), transparent 65%);
-  animation: drift-b 32s ease-in-out infinite alternate;
+  background: radial-gradient(circle, rgba(95, 208, 200, 0.09), transparent 65%);
+  animation: drift-b 36s ease-in-out infinite alternate;
 }
 @keyframes drift-a {
   0%   { transform: translate3d(0, 0, 0) scale(1); }
-  50%  { transform: translate3d(8vmax, 6vmax, 0) scale(1.14); }
+  50%  { transform: translate3d(8vmax, 6vmax, 0) scale(1.12); }
   100% { transform: translate3d(-4vmax, 10vmax, 0) scale(0.94); }
 }
 @keyframes drift-b {
@@ -68,7 +70,6 @@ body::after {
   min-height: 100vh;
 }
 
-
 .boot {
   min-height: 100vh;
   display: flex;
@@ -81,7 +82,8 @@ body::after {
 .boot-title {
   font-size: 28px;
   font-weight: 800;
-  background: linear-gradient(135deg, #cfb691, #8b7355);
+  letter-spacing: 4px;
+  background: linear-gradient(135deg, #f7b46a, #d9823c);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -101,11 +103,11 @@ body::after {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(184, 192, 204, 0.45);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(184, 192, 204, 0.7);
+  background: rgba(240, 163, 94, 0.4);
 }
 
 /* 尊重系统减弱动效偏好 */
