@@ -324,7 +324,7 @@
   92% { transform: rotate(12deg); }
   96% { transform: rotate(-4deg); }
 }
-.pet-eye { animation: blink 5.5s infinite; transform-origin: center; }
+.pet-eye { animation: blink 5.5s infinite; transform-origin: center; transform-box: fill-box; }
 @keyframes blink {
   0%, 46%, 50%, 100% { transform: scaleY(1); }
   48% { transform: scaleY(0.1); }
