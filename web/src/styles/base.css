@@ -15,13 +15,8 @@ body {
   font-family: var(--font-base);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
-  /* 深色工业底：炭灰渐变 + 细网格纹理 */
-  background:
-    radial-gradient(1100px 760px at 12% -10%, rgba(240, 163, 94, 0.05), transparent 60%),
-    radial-gradient(1000px 700px at 108% 14%, rgba(95, 208, 200, 0.05), transparent 55%),
-    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-    linear-gradient(160deg, #0b0d10 0%, #101318 48%, #14181e 100%);
+  /* 主题背景（由 tokens.css 的 --bg-base 控制） */
+  background: var(--bg-base);
   background-size: auto, auto, 44px 44px, 44px 44px, auto;
   background-attachment: fixed;
   min-height: 100vh;
@@ -44,13 +39,13 @@ body::after {
 body::before {
   top: -22vmax;
   left: -14vmax;
-  background: radial-gradient(circle, rgba(240, 163, 94, 0.1), transparent 65%);
+  background: radial-gradient(circle, var(--glow-a), transparent 65%);
   animation: drift-a 30s ease-in-out infinite alternate;
 }
 body::after {
   bottom: -26vmax;
   right: -16vmax;
-  background: radial-gradient(circle, rgba(95, 208, 200, 0.09), transparent 65%);
+  background: radial-gradient(circle, var(--glow-b), transparent 65%);
   animation: drift-b 36s ease-in-out infinite alternate;
 }
 @keyframes drift-a {
@@ -83,7 +78,7 @@ body::after {
   font-size: 28px;
   font-weight: 800;
   letter-spacing: 4px;
-  background: linear-gradient(135deg, #f7b46a, #d9823c);
+  background: var(--text-grad);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -103,11 +98,11 @@ body::after {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--scroll-thumb);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(240, 163, 94, 0.4);
+  background: var(--c-sky-deep);
 }
 
 /* 尊重系统减弱动效偏好 */

@@ -35,7 +35,8 @@ app.innerHTML = `
       </div>
       <main class="content" id="view-root"></main>
     </div>
-  </div>`;
+  </div>
+  <button class="theme-toggle" id="theme-toggle" title="切换主题">☀️</button>`;
 
 const nav = document.getElementById("nav")!;
 nav.innerHTML = Object.values(routes)
@@ -110,3 +111,21 @@ const syncMini = () => {
 };
 syncMini();
 store.subscribe(syncMini);
+
+// ---- 主题切换（暖色玻璃 / 深色工业）----
+const THEME_KEY = "mgmt_theme";
+const themeBtn = document.getElementById("theme-toggle");
+const applyTheme = (theme: "light" | "dark") => {
+  document.documentElement.dataset.theme = theme === "light" ? "light" : "";
+  if (themeBtn) {
+    themeBtn.textContent = theme === "light" ? "🌙" : "☀️";
+    themeBtn.title = theme === "light" ? "切换为深色工业风" : "切换为暖色玻璃风";
+  }
+  localStorage.setItem(THEME_KEY, theme);
+};
+const urlTheme = new URLSearchParams(location.search).get("theme");
+applyTheme(urlTheme === "light" ? "light" : localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark");
+themeBtn?.addEventListener("click", () => {
+  const cur = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  applyTheme(cur === "light" ? "dark" : "light");
+});
