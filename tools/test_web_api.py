@@ -12,8 +12,8 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core import config as cfg
-from core.pet_state import PetStatus
 from core.chat_history import ChatHistoryManager
+from core.pet_state import PetStatus
 from core.web_server import ManagementServer
 
 SETTINGS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "settings.json")

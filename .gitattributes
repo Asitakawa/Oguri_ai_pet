@@ -1,0 +1,20 @@
+# 统一换行：仓库内一律 LF，避免 Windows autocrlf 与 ruff autofix 冲突产生 \r\r\n
+* text=auto eol=lf
+
+# 二进制资源不做换行转换
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pyc binary
+
+# 锁文件由工具生成，diff 无意义
+web/package-lock.json -diff linguist-generated

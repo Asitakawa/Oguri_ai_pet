@@ -1,4 +1,4 @@
-"""小游戏冒烟测试：真实 Tk 窗口驱动四个游戏并截图（开发用，不参与 pytest）"""
+"""小游戏冒烟测试：真实 Tk 窗口驱动五个游戏并截图（开发用，不参与 pytest）"""
 import pathlib
 import sys
 import time
@@ -13,6 +13,7 @@ from PIL import ImageGrab
 from game.dash_run.game import DashRunGame
 from game.eating_rush.game import EatingRushGame
 from game.fishing.game import FishingGame
+from game.fly_high.game import FlyHighGame
 from game.onigiri_catch.game import OnigiriCatchGame
 
 for _stream in (sys.stdout, sys.stderr):
@@ -43,6 +44,11 @@ class FakePet:
         self.label.pack()
         self._cur_img_key = None
         self.game_manager = FakeGameManager()
+        # 一飞冲天需要读取脱手速度与拖拽状态
+        self.is_dragging = False
+        self.velocity_x = 0.0
+        self.velocity_y = 0.0
+        self._click_timer = None
 
     def _move(self):
         self.root.geometry(f"+{int(self.x)}+{int(self.y)}")
@@ -50,6 +56,15 @@ class FakePet:
     def _set_pet_image(self, key, auto_reset=None):
         self._cur_img_key = key
         self.label.config(text=f"[{key}]")
+
+    def _cancel_click_timer(self):
+        pass
+
+    def stop_all_animations(self):
+        pass
+
+    def _on_drag_end(self, event=None):
+        print("  (回到普通拖拽处理)")
 
     def show_talk(self, text):
         print(f"  TALK: {text}")
@@ -130,7 +145,15 @@ def setup_fishing(game, pet):
     time.sleep(0.8)
 
 
+def setup_fly_high(game, pet):
+    """模拟一次向上甩脱手：设置脱手速度后触发游戏的松手处理。"""
+    pet.velocity_x = 6.0
+    pet.velocity_y = -42.0
+    game._on_throw()
+
+
 if __name__ == "__main__":
+    run_game(FlyHighGame, "fly_high", setup_fly_high, seconds=2.4)
     run_game(OnigiriCatchGame, "onigiri_catch", setup_catch, seconds=1.6)
     run_game(EatingRushGame, "eating_rush", setup_eating, seconds=1.0)
     run_game(DashRunGame, "dash_run", setup_dash, seconds=1.8)
