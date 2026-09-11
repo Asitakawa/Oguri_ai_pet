@@ -36,6 +36,10 @@ class BaseGame:
         "<Leave>": "_on_leave",
     }
 
+    # 需要保留给游戏自己接管的交互（不覆盖为 noop）。
+    # 典型场景：一飞冲天要靠左键拖拽 + 松手来测量抛掷速度。
+    _PASSTHROUGH_BINDINGS: frozenset = frozenset()
+
     def __init__(self, pet) -> None:
         self.pet = pet
         self._active = False
@@ -78,6 +82,8 @@ class BaseGame:
         if not self.pet.label:
             return
         for seq, attr in self._PET_BINDINGS.items():
+            if seq in self._PASSTHROUGH_BINDINGS:
+                continue
             func = getattr(self.pet, attr, None)
             if func:
                 self._pet_originals[seq] = func
@@ -101,7 +107,16 @@ class BaseGame:
 
     # ── 调度（stop 统一取消） ───────────────
     def _schedule(self, delay_ms: int, func: Callable, *args) -> str:
-        after_id = self.pet.root.after(delay_ms, func, *args)
+        holder: Dict[str, str] = {}
+
+        def _run() -> None:
+            # 回调已触发：把自己的 id 从待取消集合摘掉，否则长时间游戏
+            # （如无尽模式的冲刺障碍跑）会让集合无限增长
+            self._after_ids.discard(holder.get("id", ""))
+            func(*args)
+
+        after_id = self.pet.root.after(delay_ms, _run)
+        holder["id"] = after_id
         self._after_ids.add(after_id)
         return after_id
 
@@ -210,11 +225,15 @@ class BaseGame:
         if self._counter_panel:
             widgets = [self._counter_panel] + list(self._counter_panel.winfo_children())
         for w in widgets:
-            for seq in ("<ButtonPress-1>", "<B1-Motion>"):
-                try:
-                    w.bind(seq, self._counter_press if draggable else self._noop)
-                except Exception:
-                    pass
+            try:
+                w.bind("<ButtonPress-1>",
+                       self._counter_press if draggable else self._noop)
+                # 拖动位移必须绑到 _counter_motion：此前误绑 _counter_press，
+                # 导致所有 BaseGame 游戏的计数器都拖不动
+                w.bind("<B1-Motion>",
+                       self._counter_motion if draggable else self._noop)
+            except Exception:
+                pass
 
     def _counter_press(self, event) -> None:
         self._counter_drag_off = (

@@ -7,25 +7,30 @@ import subprocess
 import sys
 import threading
 import time
-import webbrowser
 import tkinter as tk
+import webbrowser
 from tkinter import Menu, messagebox
 
 from core import config as cfg
 from core.ai_client import AIClient
 from core.chat_history import ChatHistoryManager
+from core.companion import CompanionStats
+from core.memory_facts import FactExtractor, MemoryFacts
 from core.paths import get_data_path, get_resource_path
 from core.pet_state import PetStatus
 from core.reminder import ScheduleManager
-from core.web_server import ManagementServer
+from core.screenshot_policy import ScreenshotPolicy
 from core.skill_system.manager import SkillManager
+from core.web_server import ManagementServer
 from game import GameManager
 from ui.animations import AnimationMixin
 from ui.bubble import ChatBubble
-from ui.dialogs import UIDialogs
 from ui.input_bar import InputBar
 from ui.pet_sprite import PetSprite
 from ui.status_bar import StatusBar
+from utils.logger import get_logger
+
+log = get_logger("pet_window")
 
 
 def _load_psutil():
@@ -37,27 +42,63 @@ def _load_psutil():
 class KurumiPet(AnimationMixin):
     def __init__(self):
         self._init_attrs()
+        self.companion = CompanionStats()
+        self._away_seconds = self.companion.start_session()
+        self.memory_facts = MemoryFacts(companion=self.companion)
         self.chat_history = ChatHistoryManager(
-            get_data_path(cfg.CHAT_HISTORY_FILE), cfg.MAX_HISTORY_LENGTH
+            get_data_path(cfg.CHAT_HISTORY_FILE), cfg.MAX_HISTORY_LENGTH,
+            companion=self.companion,
         )
-        self.ai = AIClient()
-        self.dialogs = UIDialogs(self)
+        self.ai = AIClient(facts=self.memory_facts)
+        self.fact_extractor = FactExtractor(self.ai, self.chat_history, self.memory_facts)
         self.schedule_manager = ScheduleManager(self)
         self.skill_manager = SkillManager(self)
         self.game_manager = GameManager(self)
         self.sprite = PetSprite(self)
         self.input_bar = InputBar(self)
-        self.status = PetStatus()
+        self.status = PetStatus(companion=self.companion)
+        self.screenshot_policy = ScreenshotPolicy()
         self.web_server = ManagementServer(self)
         self.web_server.start()
         self._activate_status_callbacks()
         self._init_monitoring()
+        # 先按默认键色建窗，等素材加载完再换成「素材里没用到」的颜色
+        self.key_color = 'black'
         self._init_window()
         self._init_images()
+        self._retune_key_color()
         self._init_ui()
         self._bind_events()
         self._start_threads()
+        self._greet_returning_trainer()
         self.root.mainloop()
+
+    def _greet_returning_trainer(self):
+        """离开一段时间后重逢，先说一句；首次启动或刚关就开则不打扰。"""
+        text = self.companion.away_text(self._away_seconds)
+        if text:
+            self.root.after(2500, lambda: self.show_talk(text))
+            self.root.after(2500 + 6000, self.hide_talk)
+            return
+        # 离线太久导致她饿了：优先提醒吃饭，比寒暄更贴合状态
+        if self.status.offline_minutes >= 60 and self.status.hunger < cfg.HUNGER_LOW_THRESHOLD:
+            self.root.after(2500, lambda: self.show_talk("好久没吃饭了…训练员，有饭团吗"))
+            self.root.after(2500 + 6000, self.hide_talk)
+            return
+        self._maybe_onboard()
+
+    def _maybe_onboard(self):
+        """首次运行给一次操作提示：不然没人知道右键有菜单、中键能看图。"""
+        if not self.companion.snapshot().get("onboarded"):
+            # 有 Key 说明已经会用管理面板了，不用再教
+            if self.ai.is_configured:
+                self.companion.set_flag("onboarded")
+                return
+            self.root.after(2500, lambda: self.show_talk(
+                "右键点小栗帽可以喂饭团、玩游戏～\n在「打开管理面板」里填 API Key 就能聊天了"
+            ))
+            self.root.after(2500 + 9000, self.hide_talk)
+            self.companion.set_flag("onboarded")
 
     def _init_attrs(self):
         self.label = None
@@ -67,18 +108,24 @@ class KurumiPet(AnimationMixin):
         self.status_bar = None
         self.menu = None
         self.default_pet_size = cfg.DEFAULT_PET_SIZE
-        self.pet_size = self.default_pet_size
-        self.scale_factor = 1.0
+        # 恢复上次保存的缩放（settings.json 的 scale），而非固定 100%
+        self.scale_factor = max(cfg.MIN_SCALE, min(cfg.MAX_SCALE, cfg.PET_SCALE))
+        self.pet_size = (
+            int(self.default_pet_size[0] * self.scale_factor),
+            int(self.default_pet_size[1] * self.scale_factor),
+        )
         self.pic_dir = get_resource_path("resources/images")
         self.is_auto_talking = False
         self.is_dialog_showing = False
         self._is_processing = False
         self.running = True
         self.is_dragging = False
+        self._drag_moved = False
         self.velocity_x = 0
         self.velocity_y = 0
         self._vx_buf = []
         self._vy_buf = []
+        self._drag_event_times = []
         self.inertia_active = False
         self.is_hovering = False
         self.shake_animation = False
@@ -87,6 +134,11 @@ class KurumiPet(AnimationMixin):
         self._click_timer = None
         self._shown_click = False
         self._api_talking = False
+        # 漫步状态。必须在 _init_attrs 里就绪：show_talk 会在 _start_wander_loop
+        # 之前被调用（启动问候），而它会调 _pause_wander
+        self._wander_after_id = None
+        self._wander_target_x = None
+        self._wander_pause_until = 0.0
         self.min_auto_reply_time = cfg.MIN_AUTO_REPLY
         self.max_auto_reply_time = cfg.MAX_AUTO_REPLY
         self.preset_min_interval = cfg.PRESET_MIN_INTERVAL
@@ -113,25 +165,84 @@ class KurumiPet(AnimationMixin):
             self.root = tk.Tk()
         self.root.overrideredirect(True)
         self.root.attributes('-topmost', True)
-        self.root.attributes('-transparentcolor', 'black')
-        self.root.config(bg='black')
+        self.root.config(bg=self.key_color)
         self.screen_w = self.root.winfo_screenwidth()
         self.screen_h = self.root.winfo_screenheight()
         self.x = self.screen_w - self.pet_size[0] - 50
         self.y = self.screen_h - self.pet_size[1] - 50
         self.root.geometry(f"{self.pet_size[0]}x{self.pet_size[1]}+{int(self.x)}+{int(self.y)}")
 
+    def _apply_transparency(self):
+        """设置透明色键。
+
+        Tk 在 Windows 上只有色键透明（`-transparentcolor`）：窗口里等于该颜色的
+        像素会被整片挖掉。真正的 per-pixel alpha 要绕过 Tk 的绘制用
+        `UpdateLayeredWindow` 自己贴 ARGB 位图，透明窗口、气泡、输入条、计数器
+        窗口都得跟着换，改动过大，暂不采用。
+
+        能改进的是「键色选哪个」：原先硬编码 black，等于要求素材里不能出现纯黑
+        像素，否则会被挖出洞。改成从素材里挑一个没用到的深色当键色（见
+        _retune_key_color），美术就不必再回避黑色。
+        """
+        try:
+            self.root.attributes('-transparentcolor', self.key_color)
+        except Exception:
+            self.key_color = 'black'
+            try:
+                self.root.attributes('-transparentcolor', 'black')
+            except Exception:
+                log.debug("设置透明色键失败", exc_info=True)
+
     # ── 图片 ──────────────────────────────────
     def _init_images(self):
-        self.sprite.load_raw(self.pic_dir, self.pet_size)
+        self._rebuild_sprite(self.key_color)
+
+    def _rebuild_sprite(self, key_color):
+        """按指定键色重新合成精灵图（Tk 会丢 alpha，透明必须靠色键）。"""
+        self.sprite.load_raw(self.pic_dir, self.pet_size, key_color=key_color)
         self.images = self.sprite.images
         self.current_img = self.sprite.current_img
+
+    @staticmethod
+    def _pick_key_color(sprites: dict, fallback: str = "#010203") -> str:
+        """挑一个素材里没出现过的颜色当透明键色。"""
+        used = set()
+        for img in sprites.values():
+            try:
+                rgb = img.convert("RGB")
+                data = getattr(rgb, "get_flattened_data", None)
+                used.update(data() if data else rgb.getdata())
+            except Exception:
+                continue
+        # 从深色里试，越靠前越接近黑（视觉上最不突兀）
+        for candidate in ((1, 2, 3), (3, 1, 2), (2, 3, 1), (5, 7, 11), (13, 17, 19),
+                          (23, 29, 31), (37, 41, 43), (53, 59, 61), (67, 71, 73)):
+            if candidate not in used:
+                return "#%02x%02x%02x" % candidate
+        return fallback
+
+    def _retune_key_color(self):
+        """素材加载完后挑一个未使用的透明键色，避免挖掉素材里的纯黑像素。"""
+        try:
+            picked = self._pick_key_color(self.sprite._raw_images)
+        except Exception:
+            picked = 'black'
+        if picked == self.key_color:
+            return
+        self.key_color = picked
+        # 重建精灵图：透明区域要填成新键色
+        self._rebuild_sprite(picked)
+        try:
+            self.root.config(bg=picked)
+            self.root.attributes('-transparentcolor', picked)
+        except Exception:
+            log.debug("切换透明键色失败，保留原色", exc_info=True)
 
     # ── UI ────────────────────────────────────
     def _init_ui(self):
         self.label = tk.Label(
             self.root, bd=0, highlightthickness=0, relief='flat',
-            bg='black', image=self.current_img,
+            bg=self.key_color, image=self.current_img,
         )
         self.label.pack(fill='both', expand=True)
         self.bubble = ChatBubble(self)
@@ -202,7 +313,7 @@ class KurumiPet(AnimationMixin):
     def _toggle_game(self, key):
         if self.game_manager.is_active():
             self.game_manager.stop()
-        self.game_manager.start(key)
+        self.game_manager.start(key)  # 内部会计入 games_played
 
     def _show_menu(self, e):
         self._build_menu()
@@ -226,7 +337,7 @@ class KurumiPet(AnimationMixin):
         self.status._on_energy_low = on_energy_low
 
     def _feed_pet(self):
-        self.status.feed()
+        self.status.feed()  # 内部会计入 feed_count
         self.show_talk(random.choice(cfg.FEED_TALK_TEXTS))
         self.eat_action(callback=lambda: self.root.after(500, self.hide_talk))
 
@@ -269,6 +380,7 @@ class KurumiPet(AnimationMixin):
         self._cancel_click_timer()
         self._shown_click = False
         self.is_dragging = True
+        self._drag_moved = False
         self.inertia_active = False
         self.drag_offset_x = e.x
         self.drag_offset_y = e.y
@@ -276,12 +388,13 @@ class KurumiPet(AnimationMixin):
         self.velocity_y = 0
         self._vx_buf.clear()
         self._vy_buf.clear()
+        self._drag_event_times.clear()
         self.stop_all_animations()
         self.status.spend_energy()
         self._click_timer = self.root.after(180, self._show_click_image)
-
     def _on_drag_move(self, e):
         if self.is_dragging:
+            self._drag_moved = True
             if not self._shown_click:
                 self._cancel_click_timer()
                 self._show_click_image()
@@ -291,9 +404,13 @@ class KurumiPet(AnimationMixin):
             vy = ny - self.y
             self._vx_buf.append(vx)
             self._vy_buf.append(vy)
+            # 记录事件时间戳：velocity_* 的单位是「每事件位移」，
+            # 一飞冲天需要它换算成 px/s 才能摆脱鼠标轮询率的影响
+            self._drag_event_times.append(time.time())
             if len(self._vx_buf) > 3:
                 self._vx_buf.pop(0)
                 self._vy_buf.pop(0)
+                self._drag_event_times.pop(0)
             self.velocity_x = sum(self._vx_buf) / len(self._vx_buf)
             self.velocity_y = sum(self._vy_buf) / len(self._vy_buf)
             self.x = max(0, min(nx, self.screen_w - self.pet_size[0]))
@@ -307,6 +424,11 @@ class KurumiPet(AnimationMixin):
     def _on_drag_end(self, e):
         self._cancel_click_timer()
         self.is_dragging = False
+        self._pause_wander()  # 刚被放下，别马上自己走开
+        # 只有真的拖动过才计数（单击也会走 press → release）
+        if getattr(self, "_drag_moved", False):
+            self.companion.bump("drag_count")
+            self._drag_moved = False
         speed = math.sqrt(self.velocity_x ** 2 + self.velocity_y ** 2)
         if speed > 6:
             self.inertia_active = True
@@ -347,6 +469,7 @@ class KurumiPet(AnimationMixin):
     # ── 气泡 ──────────────────────────────────
     def show_talk(self, text):
         self.is_dialog_showing = True
+        self._pause_wander()
         self.bubble.show(text)
         print(f"💬 {text}")
 
@@ -436,6 +559,44 @@ class KurumiPet(AnimationMixin):
     def _start_threads(self):
         threading.Thread(target=self._preset_talk_loop, daemon=True).start()
         threading.Thread(target=self._api_talk_loop, daemon=True).start()
+        self._start_wander_loop()
+        self._start_screen_watch()
+
+    # ── 分辨率/显示器变化 ─────────────────────
+    def _start_screen_watch(self):
+        """轮询屏幕尺寸。
+
+        插拔显示器、改分辨率、投屏之后，原来的坐标可能已经在屏幕外，
+        桌宠会"消失"。Tk 没有跨平台的分辨率变化事件，这里低频轮询。
+        """
+        self.root.after(cfg.SCREEN_CHECK_INTERVAL * 1000, self._check_screen)
+
+    def _check_screen(self):
+        try:
+            w = self.root.winfo_screenwidth()
+            h = self.root.winfo_screenheight()
+            if (w, h) != (self.screen_w, self.screen_h):
+                log.info("屏幕尺寸变化 %sx%s → %sx%s，重新归位",
+                         self.screen_w, self.screen_h, w, h)
+                self.screen_w, self.screen_h = w, h
+                self._clamp_to_screen()
+        except Exception:
+            log.debug("检查屏幕尺寸失败", exc_info=True)
+        finally:
+            if self.running:
+                self.root.after(cfg.SCREEN_CHECK_INTERVAL * 1000, self._check_screen)
+
+    def _clamp_to_screen(self):
+        """把桌宠拉回可见区域。"""
+        max_x = max(0, self.screen_w - self.pet_size[0])
+        max_y = max(0, self.screen_h - self.pet_size[1])
+        new_x = max(0, min(self.x, max_x))
+        new_y = max(0, min(self.y, max_y))
+        if (new_x, new_y) != (self.x, self.y):
+            self.x, self.y = new_x, new_y
+            self._move()
+        # 漫步目标也可能落在新屏幕外
+        self._wander_target_x = None
 
     def _preset_talk_loop(self):
         def _say(text, anim=None):
@@ -464,6 +625,10 @@ class KurumiPet(AnimationMixin):
                 break
             if self._api_talking or self._is_processing:
                 continue
+            # 游戏期间让位：气泡会盖住游戏画面，动画也会和游戏抢桌宠位置
+            if self._busy_with_game():
+                print("预设自动回复: 游戏进行中, 跳过本轮")
+                continue
             try:
                 self.is_auto_talking = True
                 h = self.status.hunger_pct
@@ -484,6 +649,11 @@ class KurumiPet(AnimationMixin):
                 self.is_auto_talking = False
 
     def _api_talk_loop(self):
+        """AI 主动搭话。
+
+        截屏时机由 ScreenshotPolicy 按情境决定（窗口切换/长时间同一件事/深夜），
+        而不是无条件定时截屏——既省 token，也避免在你不看屏幕时反复上传画面。
+        """
         def _say(text):
             try:
                 self.root.after(0, lambda: self.show_talk(text))
@@ -499,13 +669,23 @@ class KurumiPet(AnimationMixin):
                 break
             if not self.ai.is_configured:
                 continue
+            # 顺手沉淀长期记忆：攒够了新对话就在后台跑一次提取
+            self._maybe_extract_facts()
             if self._is_processing:
                 print("AI自动回复: 用户正在对话中, 跳过本轮")
                 continue
+            if self._busy_with_game():
+                print("AI自动回复: 游戏进行中, 跳过本轮")
+                continue
+            reason = self.screenshot_policy.decide()
+            if reason is None:
+                print("AI自动回复: 当前情境不适合打扰, 跳过本轮")
+                continue
+            print(f"AI自动回复: 触发原因「{reason}」")
             try:
                 self._api_talking = True
                 ctx = self.chat_history.get_context(10)
-                text = self.ai.auto_talk_prompt(history_context=ctx)
+                text = self.ai.auto_talk_prompt(history_context=ctx, reason=reason)
                 _say(text)
                 self.root.after(0, self.tilt_head)
                 time.sleep(cfg.AUTO_TALK_DURATION)
@@ -521,6 +701,95 @@ class KurumiPet(AnimationMixin):
             chunk = min(2, remaining)
             time.sleep(chunk)
             remaining -= chunk
+
+    def _busy_with_game(self):
+        """游戏进行中：自动搭话与漫步都让位给游戏。"""
+        try:
+            gm = getattr(self, "game_manager", None)
+            return bool(gm is not None and gm.is_active())
+        except Exception:
+            return False
+
+    def _maybe_extract_facts(self):
+        """对话攒够了就把它们压缩成长期记忆（后台线程，不阻塞）。"""
+        ex = getattr(self, "fact_extractor", None)
+        if ex is None or not ex.should_extract():
+            return
+        if self._busy_with_game():
+            return
+        threading.Thread(target=self._run_fact_extraction, daemon=True).start()
+
+    def _run_fact_extraction(self):
+        try:
+            self.fact_extractor.extract_once()
+        except Exception:
+            log.exception("长期记忆提取失败")
+
+    # ── 待机漫步 ──────────────────────────────
+    def _start_wander_loop(self):
+        """待机时自己走两步，别像贴纸一样钉在原地。
+
+        全程跑在 Tk 主线程（用 after 串联），避免和工作线程抢窗口位置。
+        """
+        self._wander_after_id = None
+        self._wander_target_x = None
+        self._schedule_wander()
+
+    def _pause_wander(self, seconds=None):
+        """交互后推迟漫步，避免刚被放下就自己走开。"""
+        secs = cfg.WANDER_PAUSE_AFTER_INTERACT if seconds is None else seconds
+        self._wander_pause_until = max(
+            getattr(self, "_wander_pause_until", 0.0), time.time() + secs)
+
+    def _schedule_wander(self):
+        if not self.running:
+            return
+        delay = random.randint(cfg.WANDER_MIN_INTERVAL, cfg.WANDER_MAX_INTERVAL) * 1000
+        self._wander_after_id = self.root.after(delay, self._begin_wander)
+
+    def _wander_allowed(self):
+        if not self.running:
+            return False
+        if self.is_dragging or self.inertia_active:
+            return False
+        if self.is_auto_talking or self._api_talking or self._is_processing:
+            return False
+        if self.is_dialog_showing or self.is_hovering:
+            return False
+        if time.time() < self._wander_pause_until:
+            return False
+        # 游戏会自己摆布桌宠位置，别去抢
+        return not self._busy_with_game()
+
+    def _begin_wander(self):
+        """挑一个附近的目标点，然后按步走过去。"""
+        if not self._wander_allowed():
+            self._schedule_wander()
+            return
+        span = cfg.WANDER_MAX_DISTANCE
+        delta = random.choice([-1, 1]) * random.randint(int(span * 0.3), span)
+        target = max(0, min(self.x + delta, self.screen_w - self.pet_size[0]))
+        if abs(target - self.x) < 24:
+            self._schedule_wander()
+            return
+        self._wander_target_x = target
+        self._wander_step()
+
+    def _wander_step(self):
+        if self._wander_target_x is None or not self._wander_allowed():
+            self._wander_target_x = None
+            self._schedule_wander()
+            return
+        remaining = self._wander_target_x - self.x
+        if abs(remaining) <= cfg.WANDER_SPEED:
+            self.x = self._wander_target_x
+            self._move()
+            self._wander_target_x = None
+            self._schedule_wander()
+            return
+        self.x += cfg.WANDER_SPEED if remaining > 0 else -cfg.WANDER_SPEED
+        self._move()
+        self.root.after(cfg.WANDER_STEP_MS, self._wander_step)
 
     # ── 缩放 ──────────────────────────────────
     def _resize_pet(self, factor):
@@ -578,6 +847,13 @@ class KurumiPet(AnimationMixin):
             "GC执行次数": self.gc_counter,
             "错误数量": len(self.error_log),
         }
+        try:
+            snap = self.companion.snapshot()
+            info["陪伴天数"] = self.companion.days_together()
+            info["累计陪伴"] = f"{snap['total_seconds'] / 3600:.1f}小时"
+            info["累计喂食"] = snap["feed_count"]
+        except Exception:
+            pass
         psutil = _load_psutil()
         if psutil:
             try:
@@ -593,6 +869,8 @@ class KurumiPet(AnimationMixin):
         self.chat_history.save(sync=True)
         self.schedule_manager.stop()
         self.status.stop()
+        self._stop_game_if_active()
+        self._persist_session()
         if getattr(self, "web_server", None):
             self.web_server.stop()
         args = [sys.executable]
@@ -601,6 +879,26 @@ class KurumiPet(AnimationMixin):
         args.append("--restart")
         subprocess.Popen(args)
         self.root.destroy()
+
+    def _stop_game_if_active(self):
+        """游戏可能持有全屏置顶覆盖窗，退出/重启前必须先拆掉。"""
+        gm = getattr(self, "game_manager", None)
+        try:
+            if gm is not None and gm.is_active():
+                gm.stop()
+        except Exception:
+            log.exception("停止游戏失败")
+
+    def _persist_session(self):
+        """退出/重启前把状态与陪伴统计落盘。"""
+        try:
+            self.status.save()
+        except Exception:
+            log.exception("保存宠物状态失败")
+        try:
+            self.companion.save()
+        except Exception:
+            log.exception("保存陪伴统计失败")
 
     # ── 退出 ──────────────────────────────────
     def quit(self):
@@ -612,10 +910,12 @@ class KurumiPet(AnimationMixin):
         self.running = False
         self.stop_all_animations()
         self.status.stop()
+        self._stop_game_if_active()
         if getattr(self, "web_server", None):
             self.web_server.stop()
         self.schedule_manager.stop()
         self.chat_history.save(sync=True)
+        self._persist_session()
 
         info = self.get_system_info()
         hrs = int((time.time() - self.start_time) // 3600)
