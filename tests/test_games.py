@@ -1,4 +1,6 @@
 """四个新小游戏：规则层与注册表测试（不依赖 Tk 窗口）"""
+import math
+
 from game.rules import (
     ONIGIRI_ITEM_TYPES,
     CatchRules,
@@ -145,6 +147,58 @@ def test_fishing_bobber_range():
         y = FishingRules.bobber_y(t, 1)
         assert FishingRules.CENTER_Y - FishingRules.AMPLITUDE - 1 <= y <= FishingRules.CENTER_Y + FishingRules.AMPLITUDE + 1
     assert abs(FishingRules.bobber_y(0, 1) - FishingRules.CENTER_Y) < 1
+
+
+def test_fishing_phase_zero_starts_at_center():
+    """phase=0 时 sin(0)=0，开局落在区间正中——这正是原来的难度漏洞。"""
+    y = FishingRules.bobber_y(0, 1, 0.0)
+    assert abs(y - FishingRules.CENTER_Y) < 1
+    assert FishingRules.judge(y - FishingRules.CENTER_Y, FishingRules.zone_half(1)) == "perfect"
+
+
+def test_fishing_random_phase_never_starts_inside_zone():
+    """random_phase 必须保证开局浮标不在区间内，否则「立刻点」必中。"""
+    for round_no in range(1, FishingRules.TOTAL_ROUNDS + 1):
+        zh = FishingRules.zone_half(round_no)
+        for _ in range(300):
+            ph = FishingRules.random_phase(round_no)
+            assert -math.pi <= ph <= math.pi
+            y = FishingRules.bobber_y(0.0, round_no, ph)
+            judgment = FishingRules.judge(y - FishingRules.CENTER_Y, zh)
+            assert judgment != "perfect", (
+                f"回合 {round_no} 相位 {ph:.3f} 开局就落在区间内（offset={y - FishingRules.CENTER_Y:.1f}）"
+            )
+
+
+def test_fishing_opening_is_learnable_not_hopeless():
+    """开局应落在区间外一点（near 带内），而不是随机到远端让玩家只能靠运气。"""
+    for round_no in range(1, FishingRules.TOTAL_ROUNDS + 1):
+        zh = FishingRules.zone_half(round_no)
+        offsets = [abs(FishingRules.bobber_y(0.0, round_no, FishingRules.random_phase(round_no))
+                       - FishingRules.CENTER_Y) for _ in range(200)]
+        # 全部落在 near 判定范围内（perfect 边界 ~ +20px）
+        assert max(offsets) <= zh + 20, f"回合 {round_no} 开局最远偏移 {max(offsets):.1f} 超出 near 带"
+        assert min(offsets) > zh, f"回合 {round_no} 开局最小偏移 {min(offsets):.1f} 落进了 perfect 带"
+
+
+def test_fishing_random_phase_is_varied():
+    """不能退化成固定值，否则玩家依然可以背板。"""
+    seen = {round(FishingRules.random_phase(1), 3) for _ in range(200)}
+    assert len(seen) > 50, f"相位取值过于集中: {len(seen)} 种"
+
+
+def test_fishing_random_phase_covers_both_branches():
+    """相位应同时出现「正向」与「π 侧」两种，避免总是同一个方向开局。"""
+    phases = [FishingRules.random_phase(1) for _ in range(400)]
+    assert any(abs(p) < math.pi / 2 for p in phases)
+    assert any(abs(p) > math.pi / 2 for p in phases)
+
+
+def test_fishing_random_phase_stays_within_amplitude():
+    for _ in range(200):
+        ph = FishingRules.random_phase(1)
+        y = FishingRules.bobber_y(0.0, 1, ph)
+        assert abs(y - FishingRules.CENTER_Y) <= FishingRules.AMPLITUDE + 1
 
 
 def test_fishing_period_at():

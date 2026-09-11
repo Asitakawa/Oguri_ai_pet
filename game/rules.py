@@ -233,10 +233,37 @@ class FishingRules:
         return 2.6
 
     @staticmethod
-    def bobber_y(elapsed: float, round_no: int = 1) -> float:
+    def bobber_y(elapsed: float, round_no: int = 1, phase: float = 0.0) -> float:
+        """浮标纵坐标。
+
+        phase 是正弦初相位。默认 0 时 elapsed=0 恰好落在 CENTER_Y（区间正中），
+        因此实际游戏必须传入每回合随机化的 phase——否则「开局立刻点」每回合
+        都是 perfect，难度形同虚设（见 random_phase）。
+        """
         period = FishingRules.period_at(round_no)
         return (FishingRules.CENTER_Y
-                + FishingRules.AMPLITUDE * math.sin(2 * math.pi * elapsed / period))
+                + FishingRules.AMPLITUDE
+                * math.sin(2 * math.pi * elapsed / period + phase))
+
+    @staticmethod
+    def random_phase(round_no: int, rng=None) -> float:
+        """随机初相位，让开局浮标落在「区间外一点」的位置上。
+
+        动机：正弦在 phase=0 与 phase=π 时都过 CENTER_Y（区间正中），
+        所以每回合开局都能白送一个 perfect。
+
+        做法不是随便取相位（那会让开局位置完全不可预测），而是把开局位置
+        偏置到区间外一点（perfect 与 near 边界附近），这样：
+        - 开局乱点拿不到 perfect，必须等浮标进区间
+        - 但开局位置是可预判的，玩家能学会等待的节奏，而不是靠运气
+        """
+        zh = FishingRules.zone_half(round_no)
+        rand = rng.uniform if rng is not None else random.uniform
+        # 目标开局偏移：落在 perfect 边界外 6–18px 内
+        target = rand(zh + 6.0, zh + 18.0)
+        ratio = max(-1.0, min(1.0, target / FishingRules.AMPLITUDE))
+        base = math.asin(ratio)
+        return base if rand(0.0, 1.0) < 0.5 else math.pi - base
 
     @staticmethod
     def judge(offset: float, zone_half: float) -> str:

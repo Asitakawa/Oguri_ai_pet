@@ -35,6 +35,7 @@ class FishingGame(BaseGame):
         self._counts = {"perfect": 0, "near": 0, "miss": 0}
         self._phase = "idle"  # idle / float / result
         self._round_elapsed = 0.0
+        self._wave_phase = 0.0  # 浮标正弦初相位（每回合重新随机）
         self._float_texts: List[dict] = []
         self._overlay: Optional[tk.Toplevel] = None
         self._canvas: Optional[tk.Canvas] = None
@@ -132,6 +133,9 @@ class FishingGame(BaseGame):
         self._round_no += 1
         self._phase = "float"
         self._round_elapsed = 0.0
+        # 每回合随机初相位，且保证开局浮标不在区间内——
+        # 否则 sin(0)=0 让开局位置恒为区间正中，「立刻点」每回合必中 perfect
+        self._wave_phase = FishingRules.random_phase(self._round_no)
         self._set_status("")
         self._draw_static()
         self._render_counter()
@@ -144,7 +148,7 @@ class FishingGame(BaseGame):
         if not self._active or self._phase != "float":
             return
         self._round_elapsed += self.FRAME_MS / 1000.0
-        by = FishingRules.bobber_y(self._round_elapsed, self._round_no)
+        by = FishingRules.bobber_y(self._round_elapsed, self._round_no, self._wave_phase)
         if self._canvas and self._bobber_id:
             self._canvas.coords(self._bobber_id, 180, by)
         if self._canvas and self._line_id:
@@ -154,7 +158,7 @@ class FishingGame(BaseGame):
     def _on_cast(self, event=None) -> None:
         if not self._active or self._phase != "float":
             return
-        by = FishingRules.bobber_y(self._round_elapsed, self._round_no)
+        by = FishingRules.bobber_y(self._round_elapsed, self._round_no, self._wave_phase)
         offset = by - FishingRules.CENTER_Y
         judgment = FishingRules.judge(offset, FishingRules.zone_half(self._round_no))
         self._counts[judgment] += 1
@@ -239,6 +243,8 @@ class FishingGame(BaseGame):
             return
         c.delete("all")
         zh = FishingRules.zone_half(self._round_no)
+        # 起始位置也要按本回合相位算，否则会先画在正中再跳到真实位置
+        y0 = FishingRules.bobber_y(0.0, self._round_no, self._wave_phase)
         c.create_rectangle(20, FishingRules.CENTER_Y - zh, 340, FishingRules.CENTER_Y + zh,
                            fill=cfg.C_MINT, stipple="gray50", outline=cfg.C_MINT_DEEP, width=2)
         c.create_line(20, FishingRules.CENTER_Y, 340, FishingRules.CENTER_Y,
@@ -246,7 +252,7 @@ class FishingGame(BaseGame):
         for yy in (70, 450):
             c.create_line(20, yy, 340, yy, fill=cfg.C_SKY, width=3)
         c.create_text(180, 34, text="钓鱼", font=(cfg.FONT_FAMILY, 13, "bold"), fill=cfg.C_WOOD)
-        self._line_id = c.create_line(180, _LINE_TOP, 180, FishingRules.CENTER_Y,
+        self._line_id = c.create_line(180, _LINE_TOP, 180, y0,
                                       fill=cfg.C_ASH, width=2, tags="line")
-        self._bobber_id = c.create_text(180, FishingRules.CENTER_Y, text="🎣",
+        self._bobber_id = c.create_text(180, y0, text="🎣",
                                         font=("Segoe UI Emoji", 30))
