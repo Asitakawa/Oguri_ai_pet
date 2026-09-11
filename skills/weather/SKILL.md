@@ -1,5 +1,5 @@
 ---
-name: get_weather
+name: weather
 description: 查询指定城市的当前天气。当用户问天气、温度、多少度、冷不冷、下雨等情况时使用。参数 city 传入城市名。
 ---
 
