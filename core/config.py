@@ -3,6 +3,8 @@
 DEFAULT_PET_SIZE = (180, 180)
 MIN_SCALE = 0.5
 MAX_SCALE = 2.0
+DEFAULT_SCALE = 1.0
+PET_SCALE = DEFAULT_SCALE  # 运行期由 settings.json 覆盖
 
 DEFAULT_MIN_AUTO_REPLY = 60
 DEFAULT_MAX_AUTO_REPLY = 300
@@ -24,7 +26,8 @@ API_KEY_KEY = "API_KEY"
 
 CHAT_HISTORY_FILE = "chat_history.json"
 MAX_HISTORY_LENGTH = 2000
-MEMORY_CONTEXT_SIZE = 400
+DEFAULT_MEMORY_CONTEXT_SIZE = 400  # 出厂默认：200 轮（一轮 = 一问一答）
+MEMORY_CONTEXT_SIZE = DEFAULT_MEMORY_CONTEXT_SIZE
 
 DATA_LOCK_FILE = ".pet.lock"
 MEMORY_CHECK_INTERVAL = 180
@@ -187,6 +190,9 @@ FEED_ENERGY_BOOST = 5
 INTERACT_ENERGY_COST = 1
 HUNGER_LOW_THRESHOLD = 30
 ENERGY_LOW_THRESHOLD = 25
+# 低值提醒：仅在「跨过阈值」时触发，且最短间隔内不重复
+LOW_STATE_RECOVER_MARGIN = 10
+LOW_STATE_REPEAT_INTERVAL = 900
 # 字体设置
 FONT_FAMILY = "Microsoft YaHei"
 FONT_SIZE = 11
@@ -196,6 +202,18 @@ FONT_SIZE_MAX = 24
 STATUS_BAR_WIDTH = 200
 STATUS_BAR_HEIGHT = 36
 STATUS_UPDATE_INTERVAL = 10
+
+# ── 待机自主行为（漫步） ────────────────────
+WANDER_MIN_INTERVAL = 45      # 两次漫步之间的最短间隔（秒）
+WANDER_MAX_INTERVAL = 150     # 最长间隔
+WANDER_MAX_DISTANCE = 260     # 单次漫游的最大横向距离（像素）
+WANDER_SPEED = 3.0            # 每步移动像素
+WANDER_STEP_MS = 50           # 每步间隔（毫秒）
+# 交互后暂停漫步的时长：别在用户刚放下她时立刻走开
+WANDER_PAUSE_AFTER_INTERACT = 20
+
+# 屏幕尺寸轮询间隔（秒）：插拔显示器/改分辨率后把桌宠拉回可见区
+SCREEN_CHECK_INTERVAL = 15
 
 FEED_TALK_TEXTS = [
     "好吃…饭团真好吃",
@@ -239,6 +257,7 @@ def _save():
                 "auto_talk_duration": AUTO_TALK_DURATION,
                 "preset_min_interval": PRESET_MIN_INTERVAL,
                 "preset_max_interval": PRESET_MAX_INTERVAL,
+                "scale": PET_SCALE,
             }, f, ensure_ascii=False, indent=2)
     except IOError as e:
         log.warning("设置保存失败: %s", e)
@@ -254,11 +273,14 @@ def _load():
                          ("max_auto_reply", "MAX_AUTO_REPLY"),
                          ("auto_talk_duration", "AUTO_TALK_DURATION"),
                          ("preset_min_interval", "PRESET_MIN_INTERVAL"),
-                         ("preset_max_interval", "PRESET_MAX_INTERVAL")]:
+                         ("preset_max_interval", "PRESET_MAX_INTERVAL"),
+                         ("scale", "PET_SCALE")]:
                 if k in d:
                     globals()[v] = d[k]
     except Exception:
         pass
+    # 缩放值需要挡在合法区间内，避免手改 settings.json 后桌宠尺寸异常
+    globals()["PET_SCALE"] = max(MIN_SCALE, min(MAX_SCALE, float(globals()["PET_SCALE"])))
 
 
 _load()

@@ -32,6 +32,7 @@ class GameManager:
         self._config_path = get_data_path("games.json")
         self._config: Dict[str, bool] = {}
         self._active = None
+        self._companion = getattr(pet, "companion", None)
         self._load()
 
     def _load(self) -> None:
@@ -71,6 +72,12 @@ class GameManager:
             self.stop()
         game = GAMES[key]["cls"](self.pet)  # type: ignore[misc]
         self._active = game
+        # 计数放在这里：桌宠菜单与管理面板都会走 start()
+        if self._companion is not None:
+            try:
+                self._companion.bump("games_played")
+            except Exception:
+                log.debug("开局计数失败", exc_info=True)
         game.start()
 
     def stop(self) -> None:
