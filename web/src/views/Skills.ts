@@ -1,10 +1,32 @@
 import { gsap } from "gsap";
 import type { Ctx, View } from "./types";
-import { api } from "../api/client";
-import type { SkillParam } from "../api/types";
+import { api, describeError } from "../api/client";
+import type { SkillInfo, SkillParam } from "../api/types";
 import { escapeHtml } from "../utils";
 
 const errMsg = (e: unknown) => String((e as Error)?.message ?? e);
+
+/** AI 可以自行导入/停用技能，列表需要定期回读 */
+const POLL_MS = 6000;
+
+// 模块级清理句柄；router 每次渲染前都会先 unmount，可安全覆盖
+let pollTimer: number | undefined;
+let visibilityHandler: (() => void) | null = null;
+
+function stopPolling(): void {
+  if (pollTimer !== undefined) {
+    window.clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+  if (visibilityHandler) {
+    document.removeEventListener("visibilitychange", visibilityHandler);
+    visibilityHandler = null;
+  }
+}
+
+function fingerprint(skills: SkillInfo[]): string {
+  return JSON.stringify(skills.map((s) => [s.name, s.enabled, s.dirname]));
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -51,34 +73,43 @@ export const Skills: View = {
 
     const listEl = () => document.getElementById("skill-list");
     const detailEl = () => document.getElementById("skill-detail");
+    let lastPrint = "";
 
-    const load = async () => {
+    const renderList = (skills: SkillInfo[]) => {
+      lastPrint = fingerprint(skills);
+      const el = listEl();
+      if (!el) return;
+      el.innerHTML = skills.length
+        ? skills.map((s) => `
+          <div class="skill-card">
+            <div class="skill-head">
+              <b>${escapeHtml(s.name)}</b>
+              <span class="badge ${s.enabled ? "" : "badge-off"}">${s.enabled ? "已启用" : "已停用"}</span>
+            </div>
+            <p class="skill-desc">${escapeHtml(s.description || "（无描述）")}</p>
+            <div class="skill-actions">
+              <label class="switch" title="启用/停用">
+                <input type="checkbox" data-name="${escapeHtml(s.name)}" ${s.enabled ? "checked" : ""}/>
+                <span></span>
+              </label>
+              <button class="btn btn-sm" data-action="detail" data-name="${escapeHtml(s.name)}">📖 详情</button>
+              <button class="btn btn-sm btn-danger" data-action="delete" data-name="${escapeHtml(s.name)}">🗑 删除</button>
+            </div>
+          </div>`).join("")
+        : '<div class="chat-empty">还没有技能，点「+ 导入技能」添加</div>';
+    };
+
+    /** force=true 用于用户主动操作后的刷新（跳过指纹比对） */
+    const load = async (force = false) => {
       try {
         const { skills } = await api.getSkills();
+        // 轮询时状态没变就不重绘：否则会打断「详情」面板与手动测试表单
+        if (!force && fingerprint(skills) === lastPrint) return;
+        renderList(skills);
+      } catch (e) {
+        if (lastPrint) return; // 已有内容就别被一次网络抖动清空
         const el = listEl();
-        if (el) {
-          el.innerHTML = skills.length
-            ? skills.map((s) => `
-              <div class="skill-card">
-                <div class="skill-head">
-                  <b>${escapeHtml(s.name)}</b>
-                  <span class="badge ${s.enabled ? "" : "badge-off"}">${s.enabled ? "已启用" : "已停用"}</span>
-                </div>
-                <p class="skill-desc">${escapeHtml(s.description || "（无描述）")}</p>
-                <div class="skill-actions">
-                  <label class="switch" title="启用/停用">
-                    <input type="checkbox" data-name="${escapeHtml(s.name)}" ${s.enabled ? "checked" : ""}/>
-                    <span></span>
-                  </label>
-                  <button class="btn btn-sm" data-action="detail" data-name="${escapeHtml(s.name)}">📖 详情</button>
-                  <button class="btn btn-sm btn-danger" data-action="delete" data-name="${escapeHtml(s.name)}">🗑 删除</button>
-                </div>
-              </div>`).join("")
-            : '<div class="chat-empty">还没有技能，点「+ 导入技能」添加</div>';
-        }
-      } catch {
-        const el = listEl();
-        if (el) el.innerHTML = '<div class="chat-empty">无法加载技能（未连接桌宠）</div>';
+        if (el) el.innerHTML = `<div class="chat-empty">${escapeHtml(describeError(e))}</div>`;
       }
     };
 
@@ -114,9 +145,9 @@ export const Skills: View = {
             </div>
             <pre class="skill-result" id="skill-result" hidden></pre>
           </div>`;
-      } catch {
+      } catch (e) {
         el.hidden = false;
-        el.innerHTML = '<div class="chat-empty">无法加载技能详情（未连接桌宠）</div>';
+        el.innerHTML = `<div class="chat-empty">${escapeHtml(describeError(e))}</div>`;
       }
     };
 
@@ -131,7 +162,7 @@ export const Skills: View = {
         try {
           await api.deleteSkill(name);
           if (detailEl()) detailEl()!.hidden = true;
-          await load();
+          await load(true);
         } catch {
           /* ignore */
         }
@@ -197,7 +228,7 @@ export const Skills: View = {
       }
     });
 
-    ctx.root.querySelector("[data-action='refresh']")?.addEventListener("click", () => void load());
+    ctx.root.querySelector("[data-action='refresh']")?.addEventListener("click", () => void load(true));
     ctx.root.querySelector("[data-action='import']")?.addEventListener("click", () => {
       const f = document.getElementById("skill-file") as HTMLInputElement | null;
       if (f) f.click();
@@ -209,7 +240,7 @@ export const Skills: View = {
       try {
         const b64 = await fileToBase64(f);
         const r = await api.importSkill(f.name, b64);
-        if (r.ok) await load();
+        if (r.ok) await load(true);
         else window.alert(r.message || "导入失败");
       } catch (err) {
         window.alert(errMsg(err));
@@ -218,6 +249,31 @@ export const Skills: View = {
       }
     });
 
-    void load();
+    // 轮询：AI 可以自行导入或停用技能，状态可能不是本页改的
+    const startPolling = () => {
+      if (pollTimer !== undefined) return;
+      pollTimer = window.setInterval(() => void load(), POLL_MS);
+    };
+    const stopMyPolling = () => {
+      if (pollTimer !== undefined) {
+        window.clearInterval(pollTimer);
+        pollTimer = undefined;
+      }
+    };
+    visibilityHandler = () => {
+      if (document.hidden) {
+        stopMyPolling();
+      } else {
+        void load();
+        startPolling();
+      }
+    };
+    document.addEventListener("visibilitychange", visibilityHandler);
+
+    await load(true);
+    startPolling();
+  },
+  unmount() {
+    stopPolling();
   },
 };

@@ -1,8 +1,11 @@
 import { gsap } from "gsap";
 import type { Ctx, View } from "./types";
-import { api } from "../api/client";
+import { api, describeError } from "../api/client";
 import type { GameInfo } from "../api/types";
 import { escapeHtml } from "../utils";
+
+/** 桌宠侧可能自行结束游戏，轮询间隔取 SSE 状态推送的两倍左右 */
+const POLL_MS = 5000;
 
 function cardHTML(g: GameInfo): string {
   return `
@@ -28,6 +31,26 @@ function cardHTML(g: GameInfo): string {
   </div>`;
 }
 
+/** 用于判断轮询结果是否真的变化，避免无谓重绘打断交互 */
+function fingerprint(games: GameInfo[], active: string | null): string {
+  return JSON.stringify([active, games.map((g) => [g.key, g.enabled, g.active])]);
+}
+
+// 模块级清理句柄。router 每次渲染前都会先 unmount，所以这里可以安全覆盖
+let pollTimer: number | undefined;
+let visibilityHandler: (() => void) | null = null;
+
+function stopPolling(): void {
+  if (pollTimer !== undefined) {
+    window.clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+  if (visibilityHandler) {
+    document.removeEventListener("visibilitychange", visibilityHandler);
+    visibilityHandler = null;
+  }
+}
+
 export const Games: View = {
   id: "games",
   title: "游戏",
@@ -45,7 +68,10 @@ export const Games: View = {
     gsap.from(".view-games .glass-card", { opacity: 0, y: 16, duration: 0.35, ease: "power2.out" });
     const grid = document.getElementById("game-grid");
 
-    const render = (games: GameInfo[]) => {
+    let lastPrint = "";
+
+    const render = (games: GameInfo[], active: string | null) => {
+      lastPrint = fingerprint(games, active);
       if (grid) {
         grid.innerHTML = games.length
           ? games.map(cardHTML).join("")
@@ -55,26 +81,54 @@ export const Games: View = {
 
     const load = async () => {
       try {
-        const { games } = await api.getGames();
-        render(games);
-      } catch {
-        if (grid) grid.innerHTML = '<div class="chat-empty">无法加载游戏（未连接桌宠）</div>';
+        const { games, active } = await api.getGames();
+        // 状态没变就不要重绘：否则每 5 秒重建一次 DOM，
+        // 正在操作开关的用户会看到点击被吞掉
+        if (fingerprint(games, active) === lastPrint) return;
+        render(games, active);
+      } catch (e) {
+        if (!lastPrint && grid) {
+          grid.innerHTML = `<div class="chat-empty">${escapeHtml(describeError(e))}</div>`;
+        }
       }
     };
+
+    const startPolling = () => {
+      if (pollTimer !== undefined) return;
+      pollTimer = window.setInterval(() => void load(), POLL_MS);
+    };
+    const stopMyPolling = () => {
+      if (pollTimer !== undefined) {
+        window.clearInterval(pollTimer);
+        pollTimer = undefined;
+      }
+    };
+
+    // 隐藏时停轮询，避免后台标签页持续打请求
+    visibilityHandler = () => {
+      if (document.hidden) {
+        stopMyPolling();
+      } else {
+        void load();
+        startPolling();
+      }
+    };
+    document.addEventListener("visibilitychange", visibilityHandler);
 
     grid?.addEventListener("click", async (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-action]");
       if (!btn) return;
       try {
         if (btn.dataset.action === "start") {
-          const { games } = await api.startGame(btn.dataset.key ?? "");
-          render(games);
+          const { games, active } = await api.startGame(btn.dataset.key ?? "");
+          render(games, active);
         } else if (btn.dataset.action === "stop") {
-          const { games } = await api.stopGame();
-          render(games);
+          const { games, active } = await api.stopGame();
+          render(games, active);
         }
       } catch {
-        /* ignore */
+        lastPrint = ""; // 失败时强制回读真实状态，避免界面停在乐观值上
+        await load();
       }
     });
 
@@ -82,13 +136,17 @@ export const Games: View = {
       const t = e.target as HTMLInputElement;
       if (t.type !== "checkbox" || !t.dataset.key) return;
       try {
-        const { games } = await api.toggleGame(t.dataset.key, t.checked);
-        render(games);
+        const { games, active } = await api.toggleGame(t.dataset.key, t.checked);
+        render(games, active);
       } catch {
         t.checked = !t.checked;
       }
     });
 
-    void load();
+    await load();
+    startPolling();
+  },
+  unmount() {
+    stopPolling();
   },
 };

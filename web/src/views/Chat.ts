@@ -1,6 +1,6 @@
 import { gsap } from "gsap";
 import type { Ctx, View } from "./types";
-import { api } from "../api/client";
+import { api, describeError } from "../api/client";
 import type { ChatMessage } from "../api/types";
 import { escapeHtml } from "../utils";
 
@@ -54,9 +54,15 @@ export const Chat: View = {
     const inputEl = () => document.getElementById("chat-input") as HTMLInputElement | null;
     const searchEl = () => document.getElementById("chat-search") as HTMLInputElement | null;
 
+    // 搜索防抖 + 竞态保护：先发的请求可能后返回，用序号丢弃过期结果
+    let searchTimer: number | undefined;
+    let loadSeq = 0;
+
     const load = async (q = "") => {
+      const seq = ++loadSeq;
       try {
         const { messages } = await api.getHistory(q);
+        if (seq !== loadSeq) return; // 已有更新的请求在飞，丢弃这次结果
         const el = listEl();
         if (el) {
           el.innerHTML = messages.length
@@ -64,9 +70,10 @@ export const Chat: View = {
             : '<div class="chat-empty">还没有聊天记录，去和小栗帽说句话吧</div>';
         }
         scrollBottom();
-      } catch {
+      } catch (e) {
+        if (seq !== loadSeq) return;
         const el = listEl();
-        if (el) el.innerHTML = '<div class="chat-empty">无法加载聊天记录（未连接桌宠）</div>';
+        if (el) el.innerHTML = `<div class="chat-empty">${escapeHtml(describeError(e))}</div>`;
       }
     };
 
@@ -91,10 +98,10 @@ export const Chat: View = {
       try {
         await api.sendChat(text);
         await load(searchEl()?.value.trim() ?? "");
-      } catch {
+      } catch (e) {
         listEl()?.insertAdjacentHTML(
           "beforeend",
-          '<div class="chat-empty">发送失败（未连接桌宠或 AI 未配置）</div>',
+          `<div class="chat-empty">${escapeHtml(describeError(e))}</div>`,
         );
       } finally {
         thinking(false);
@@ -105,7 +112,12 @@ export const Chat: View = {
     inputEl()?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") void send();
     });
-    searchEl()?.addEventListener("input", () => void load(searchEl()?.value.trim() ?? ""));
+    searchEl()?.addEventListener("input", () => {
+      if (searchTimer !== undefined) window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => {
+        void load(searchEl()?.value.trim() ?? "");
+      }, 200);
+    });
     ctx.root.querySelector("[data-action='clear']")?.addEventListener("click", async () => {
       if (!window.confirm("确定要清空所有聊天记录吗？此操作不可恢复。")) return;
       try {

@@ -14,6 +14,12 @@
   --c-sky: rgba(240, 163, 94, 0.2);
   --c-sky-deep: #f0a35e;
 
+  /* 状态环描边：必须是实色（SVG stroke 不能用渐变），
+     且不能复用 --c-rose/--c-sky（那是 18% 透明度的底色，深色下几乎看不见） */
+  --ring-hunger: #e86a5e;
+  --ring-energy: #f0a35e;
+  --ring-track: rgba(255, 255, 255, 0.12);
+
   /* 语义色 */
   --c-bg: var(--c-snow);
   --c-panel: var(--c-cream);
@@ -101,6 +107,10 @@
   --c-mint-deep: #9bc0ae;
   --c-sky: #b8cfe0;
   --c-sky-deep: #94b4cc;
+
+  --ring-hunger: #cf8f80;
+  --ring-energy: #8fb4d0;
+  --ring-track: #e2dcd2;
 
   --c-bg: var(--c-snow);
   --c-panel: var(--c-cream);

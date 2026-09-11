@@ -11,6 +11,7 @@ export interface View {
   title: string;
   icon: string;
   render(ctx: Ctx): string;
-  mount?(ctx: Ctx): void;
-  unmount?(ctx: Ctx): void;
+  /** 可以是 async；router 会 await 并捕获 rejection（不会静默吞掉） */
+  mount?(ctx: Ctx): void | Promise<void>;
+  unmount?(ctx: Ctx): void | Promise<void>;
 }

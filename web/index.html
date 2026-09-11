@@ -3,7 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
     <title>小栗帽 · 管理面板</title>
+    <script>
+      // 在任何样式生效前定好主题，避免浅色用户先闪一下深色。
+      // 优先级：?theme= 参数 > localStorage > 默认深色。
+      // 这里不写 localStorage，只反映已有选择（main.ts 负责写入）。
+      (function () {
+        try {
+          var p = new URLSearchParams(location.search).get("theme");
+          var stored = null;
+          try { stored = localStorage.getItem("mgmt_theme"); } catch (e) {}
+          var theme = p === "light" ? "light" : p === "dark" ? "dark" : (stored === "light" ? "light" : "dark");
+          // 深色是默认值，用空字符串表示，少一次属性匹配
+          document.documentElement.dataset.theme = theme === "light" ? "light" : "";
+        } catch (e) {
+          document.documentElement.dataset.theme = "";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

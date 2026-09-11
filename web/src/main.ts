@@ -113,19 +113,31 @@ syncMini();
 store.subscribe(syncMini);
 
 // ---- 主题切换（暖色玻璃 / 深色工业）----
+// 首屏主题已由 index.html 的内联脚本定好，这里只负责按钮状态与后续切换
 const THEME_KEY = "mgmt_theme";
 const themeBtn = document.getElementById("theme-toggle");
-const applyTheme = (theme: "light" | "dark") => {
+const currentTheme = (): "light" | "dark" =>
+  document.documentElement.dataset.theme === "light" ? "light" : "dark";
+
+const applyTheme = (theme: "light" | "dark", persist: boolean) => {
   document.documentElement.dataset.theme = theme === "light" ? "light" : "";
   if (themeBtn) {
     themeBtn.textContent = theme === "light" ? "🌙" : "☀️";
     themeBtn.title = theme === "light" ? "切换为深色工业风" : "切换为暖色玻璃风";
   }
-  localStorage.setItem(THEME_KEY, theme);
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* 隐私模式下 localStorage 可能不可用 */
+    }
+  }
 };
-const urlTheme = new URLSearchParams(location.search).get("theme");
-applyTheme(urlTheme === "light" ? "light" : localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark");
+
+// 只反映当前状态（与内联脚本结论一致），不写 localStorage：
+// 否则 URL 参数指定的主题会被静默固化成用户偏好
+applyTheme(currentTheme(), false);
+
 themeBtn?.addEventListener("click", () => {
-  const cur = document.documentElement.dataset.theme === "light" ? "light" : "dark";
-  applyTheme(cur === "light" ? "dark" : "light");
+  applyTheme(currentTheme() === "light" ? "dark" : "light", true);
 });
