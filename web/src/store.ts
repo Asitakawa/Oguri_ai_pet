@@ -14,6 +14,7 @@ export const initialState: AppState = {
   sysCpu: null,
   sysMemMB: null,
   petOnline: false,
+  companion: null,
   connected: false,
 };
 

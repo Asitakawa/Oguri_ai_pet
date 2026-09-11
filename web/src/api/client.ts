@@ -1,6 +1,27 @@
-import type { ChatMessage, GameInfo, LogPayload, SkillDetail, SkillInfo, SettingsPayload } from "./types";
+import type { ChatMessage, GameInfo, LogPayload, MemoryPayload, SkillDetail, SkillInfo, SettingsPayload } from "./types";
 
 const TOKEN_KEY = "mgmt_token";
+
+/** 带 HTTP 状态码的错误：让视图能区分「桌宠没开」和「token 失效」 */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/** 把任意异常转成给用户看的提示。401/403 单独说明，否则会误导成「桌宠没启动」。 */
+export function describeError(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.status === 401 || e.status === 403) {
+      return "访问令牌已失效：桌宠每次启动都会更换地址与 token，请从桌宠右键菜单重新打开管理面板";
+    }
+    return `请求失败（HTTP ${e.status}）`;
+  }
+  return "无法连接到桌宠服务：请确认桌宠正在运行";
+}
 
 /** 从 URL 读取一次性 token 并存入 sessionStorage，随后从地址栏抹掉 */
 export function initToken(): string {
@@ -37,7 +58,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       /* ignore */
     }
-    throw new Error(msg);
+    throw new ApiError(res.status, msg);
   }
   return (await res.json()) as T;
 }
@@ -51,7 +72,7 @@ async function requestText(path: string, init: RequestInit = {}): Promise<string
       ...(init.headers ?? {}),
     },
   });
-  if (!res.ok) throw new Error(`API ${path} -> ${res.status}`);
+  if (!res.ok) throw new ApiError(res.status, `API ${path} -> ${res.status}`);
   return res.text();
 }
 
@@ -89,10 +110,10 @@ export const api = {
   saveSystem(s: Partial<SettingsPayload["system"]>): Promise<{ ok: boolean }> {
     return request("/api/settings/system", { method: "POST", body: JSON.stringify(s) });
   },
-  setPetSize(scale: number): Promise<{ ok: boolean }> {
+  setPetSize(scale: number): Promise<{ ok: boolean; scale: number }> {
     return request("/api/pet/size", { method: "POST", body: JSON.stringify({ scale }) });
   },
-  saveFont(family: string, size: number): Promise<{ ok: boolean }> {
+  saveFont(family: string, size: number): Promise<{ ok: boolean; family: string; size: number }> {
     return request("/api/settings/font", { method: "POST", body: JSON.stringify({ family, size }) });
   },
   restartPet(): Promise<{ ok: boolean }> {
@@ -130,6 +151,25 @@ export const api = {
   },
   quitPet(): Promise<{ ok: boolean }> {
     return request("/api/pet/quit", { method: "POST", body: "{}" });
+  },
+  // ---- 长期记忆 ----
+  getMemory(): Promise<MemoryPayload> {
+    return request("/api/memory");
+  },
+  setMemoryEnabled(enabled: boolean): Promise<{ ok: boolean; memory: MemoryPayload }> {
+    return request("/api/memory", { method: "POST", body: JSON.stringify({ enabled }) });
+  },
+  addMemory(text: string): Promise<{ ok: boolean; added: boolean; memory: MemoryPayload }> {
+    return request("/api/memory", { method: "POST", body: JSON.stringify({ text }) });
+  },
+  deleteMemory(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  clearMemory(): Promise<{ ok: boolean; cleared: number }> {
+    return request("/api/memory", { method: "DELETE" });
+  },
+  setAutostart(enabled: boolean): Promise<{ ok: boolean; message: string; enabled: boolean }> {
+    return request("/api/settings/autostart", { method: "POST", body: JSON.stringify({ enabled }) });
   },
 };
 

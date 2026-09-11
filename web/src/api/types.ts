@@ -13,6 +13,21 @@ export interface StatusPayload {
   sysCpu: number | null;
   sysMemMB: number | null;
   petOnline: boolean;
+  /** 跨会话累积的陪伴统计；桌宠未提供时为 null */
+  companion: CompanionStats | null;
+}
+
+export interface CompanionStats {
+  daysTogether: number;
+  totalHours: number;
+  sessionSeconds: number;
+  sessions: number;
+  feedCount: number;
+  chatRounds: number;
+  dragCount: number;
+  maxFlyMeters: number;
+  gamesPlayed: number;
+  factsLearned: number;
 }
 
 export interface ChatMessage {
@@ -41,6 +56,10 @@ export interface SettingsPayload {
     presetMin: number;
     presetMax: number;
     memoryRounds: number;
+    /** 以下三项由后端下发，避免前端硬编码与后端钳制范围漂移 */
+    memoryRoundsMin: number;
+    memoryRoundsMax: number;
+    memoryRoundsDefault: number;
   };
   font: {
     family: string;
@@ -53,6 +72,11 @@ export interface SettingsPayload {
     scale: number;
     minScale: number;
     maxScale: number;
+  };
+  systemExtra: {
+    autostart: boolean;
+    autostartSupported: boolean;
+    dataDir: string;
   };
 }
 
@@ -84,4 +108,18 @@ export interface SkillDetail extends SkillInfo {
 export interface LogPayload {
   lines: string[];
   offset: number;
+}
+
+export interface MemoryFact {
+  id: string;
+  text: string;
+  source: string;
+  created_at: string;
+}
+
+export interface MemoryPayload {
+  available: boolean;
+  enabled: boolean;
+  facts: MemoryFact[];
+  maxFacts?: number;
 }

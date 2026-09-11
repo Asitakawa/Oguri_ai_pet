@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import base64
 import json
-import tempfile
 import mimetypes
 import os
 import secrets
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,16 +26,61 @@ from core.ai_providers import (
     save_api_settings,
     test_connection,
 )
-from core.paths import get_data_path, get_resource_path
+from core.paths import get_log_dir, get_resource_path
 from utils.logger import get_logger
 
 log = get_logger("web_server")
 
 DEFAULT_POLL_INTERVAL = 5.0
+
+
+def mf_max() -> int:
+    """长期记忆条数上限（供面板展示）。"""
+    try:
+        from core.memory_facts import MAX_FACTS
+
+        return MAX_FACTS
+    except Exception:
+        return 40
+
+
+def _autostart_enabled() -> bool:
+    try:
+        from core.autostart import is_enabled
+
+        return is_enabled()
+    except Exception:
+        return False
+
+
+def _data_dir() -> str:
+    try:
+        from core.paths import resolve_data_dir
+
+        return resolve_data_dir()
+    except Exception:
+        return ""
+
+# BaseServer.shutdown() 会等到 serve_forever 的 select 轮询返回为止，
+# 标准库默认 0.5s → 每次停服白等半秒（重启/退出以及测试里都能感觉到）。
+# 调小轮询间隔，停服与退出立刻返回。
+_SERVE_POLL_INTERVAL = 0.05
+# 记忆轮数的合法区间（轮 = 一问一答，对应 MEMORY_CONTEXT_SIZE 的 2 倍）
+_MEMORY_ROUNDS_MIN = 5
+_MEMORY_ROUNDS_MAX = 250
 FONT_FALLBACK = [
     "Microsoft YaHei", "SimSun", "SimHei", "KaiTi", "FangSong",
     "DengXian", "NSimSun", "YouYuan", "Microsoft JhengHei",
 ]
+
+
+class _FastShutdownHTTPServer(ThreadingHTTPServer):
+    """把 serve_forever 的轮询间隔调小，使 shutdown() 立即返回。"""
+
+    daemon_threads = True
+
+    def serve_forever(self, poll_interval: float = _SERVE_POLL_INTERVAL) -> None:
+        super().serve_forever(poll_interval)
 
 
 class ManagementServer:
@@ -63,7 +108,7 @@ class ManagementServer:
         if self._httpd:
             return True
         try:
-            httpd = ThreadingHTTPServer((self.host, self.port), self._make_handler())
+            httpd = _FastShutdownHTTPServer((self.host, self.port), self._make_handler())
         except OSError as e:
             log.warning("管理面板服务启动失败: %s", e)
             return False
@@ -137,7 +182,33 @@ class ManagementServer:
             payload["sysMemMB"] = round(psutil.Process(os.getpid()).memory_info().rss / 1048576, 1)
         except Exception:
             pass
+        payload.update(self._companion_payload())
         return payload
+
+    def _companion_payload(self) -> Dict[str, Any]:
+        """陪伴统计（跨会话累积）。缺失时返回 None，前端据此隐藏区块。"""
+        c = getattr(self.pet, "companion", None)
+        if c is None or not hasattr(c, "snapshot"):
+            return {"companion": None}
+        try:
+            snap = c.snapshot()
+            return {
+                "companion": {
+                    "daysTogether": c.days_together(),
+                    "totalHours": round(snap.get("total_seconds", 0.0) / 3600.0, 1),
+                    "sessionSeconds": round(snap.get("current_session_seconds", 0.0), 0),
+                    "sessions": snap.get("sessions", 0),
+                    "feedCount": snap.get("feed_count", 0),
+                    "chatRounds": snap.get("chat_rounds", 0),
+                    "dragCount": snap.get("drag_count", 0),
+                    "maxFlyMeters": round(snap.get("max_fly_meters", 0.0), 1),
+                    "gamesPlayed": snap.get("games_played", 0),
+                    "factsLearned": snap.get("facts_learned", 0),
+                }
+            }
+        except Exception:
+            log.exception("陪伴统计读取失败")
+            return {"companion": None}
 
     def _settings_payload(self) -> Dict[str, Any]:
         p = self.pet
@@ -160,6 +231,10 @@ class ManagementServer:
                 "presetMin": int(getattr(p, "preset_min_interval", cfg.PRESET_MIN_INTERVAL)),
                 "presetMax": int(getattr(p, "preset_max_interval", cfg.PRESET_MAX_INTERVAL)),
                 "memoryRounds": cfg.MEMORY_CONTEXT_SIZE // 2,
+                # 区间与默认值由后端下发，避免前端硬编码后与 _apply_system 的钳制范围漂移
+                "memoryRoundsMin": _MEMORY_ROUNDS_MIN,
+                "memoryRoundsMax": _MEMORY_ROUNDS_MAX,
+                "memoryRoundsDefault": cfg.DEFAULT_MEMORY_CONTEXT_SIZE // 2,
             },
             "font": {
                 "family": cfg.FONT_FAMILY,
@@ -172,6 +247,11 @@ class ManagementServer:
                 "scale": float(getattr(p, "scale_factor", 1.0)),
                 "minScale": float(getattr(p, "min_scale", cfg.MIN_SCALE)),
                 "maxScale": float(getattr(p, "max_scale", cfg.MAX_SCALE)),
+            },
+            "systemExtra": {
+                "autostart": _autostart_enabled(),
+                "autostartSupported": os.name == "nt",
+                "dataDir": _data_dir(),
             },
         }
 
@@ -224,7 +304,10 @@ class ManagementServer:
         mem = int(data.get("memoryRounds", cfg.MEMORY_CONTEXT_SIZE // 2))
         if mi > ma or pr_min > pr_max:
             raise ValueError("最短间隔不能大于最长间隔")
-        mem = max(10, min(500, mem))
+        if not (_MEMORY_ROUNDS_MIN <= mem <= _MEMORY_ROUNDS_MAX):
+            raise ValueError(
+                f"记忆轮数需在 {_MEMORY_ROUNDS_MIN}–{_MEMORY_ROUNDS_MAX} 之间"
+            )
         p.min_auto_reply_time = mi
         p.max_auto_reply_time = ma
         p.preset_min_interval = pr_min
@@ -245,7 +328,24 @@ class ManagementServer:
         return "\n".join(lines)
 
     # ---------- 游戏 / 技能 ----------
-    def _games_payload(self) -> Dict[str, Any]:
+    def _facts_payload(self) -> Dict[str, Any]:
+        mf = getattr(self.pet, "memory_facts", None)
+        if mf is None:
+            return {"enabled": False, "facts": [], "available": False}
+        try:
+            return {
+                "available": True,
+                "enabled": bool(mf.enabled),
+                "facts": mf.list_all(),
+                "maxFacts": mf_max(),
+            }
+        except Exception:
+            log.exception("长期记忆读取失败")
+            return {"available": False, "enabled": False, "facts": []}
+
+    def _games_payload(self, active_key: Optional[str] = None,
+                       clear_active: bool = False) -> Dict[str, Any]:
+        """active_key/clear_active 用于「已排到 Tk 线程但尚未执行」时的乐观回显。"""
         p = self.pet
         gm = getattr(p, "game_manager", None)
         games: List[Dict[str, Any]] = []
@@ -272,6 +372,16 @@ class ManagementServer:
                             g["active"] = True
             except Exception:
                 pass
+        if clear_active:
+            active = None
+            for g in games:
+                g["active"] = False
+        elif active_key:
+            target = next((g for g in games if g["key"] == active_key), None)
+            if target is not None:
+                active = target["name"]
+                for g in games:
+                    g["active"] = g["key"] == active_key
         return {"games": games, "active": active}
 
     def _skills_payload(self) -> Dict[str, Any]:
@@ -424,6 +534,9 @@ class ManagementServer:
             if path == "/api/skills":
                 self._send_json(handler, 200, self._skills_payload())
                 return
+            if path == "/api/memory":
+                self._send_json(handler, 200, self._facts_payload())
+                return
             if path.startswith("/api/skills/"):
                 name = unquote(path[len("/api/skills/"):])
                 detail = self._skill_detail(name)
@@ -514,19 +627,41 @@ class ManagementServer:
                             min(getattr(p, "max_scale", cfg.MAX_SCALE), scale))
                 if hasattr(p, "_resize_pet"):
                     p._resize_pet(scale)
+                setattr(cfg, "PET_SCALE", scale)
+                cfg._save()  # 落盘，否则重启后回到 100%
             except Exception as e:
                 self._send_json(handler, 500, {"error": str(e)})
                 return
-            self._send_json(handler, 200, {"ok": True, "scale": scale})
+            actual = float(getattr(p, "scale_factor", scale))
+            self._send_json(handler, 200, {"ok": True, "scale": actual})
             return
 
         if path == "/api/settings/font":
+            try:
+                size = int(data.get("size", cfg.FONT_SIZE))
+            except (TypeError, ValueError):
+                self._send_json(handler, 400, {"error": "字号必须是整数"})
+                return
             family = str(data.get("family") or cfg.FONT_FAMILY)
-            size = int(data.get("size", cfg.FONT_SIZE))
             size = max(cfg.FONT_SIZE_MIN, min(cfg.FONT_SIZE_MAX, size))
             setattr(cfg, "FONT_FAMILY", family)
             setattr(cfg, "FONT_SIZE", size)
-            self._send_json(handler, 200, {"ok": True})
+            cfg._save()  # 落盘，否则重启后字号/字体丢失
+            self._send_json(handler, 200, {"ok": True, "family": family, "size": size})
+            return
+
+        if path == "/api/settings/autostart":
+            want = bool(data.get("enabled"))
+            try:
+                from core.autostart import set_enabled
+
+                ok, message = set_enabled(want)
+            except Exception as e:
+                self._send_json(handler, 200, {"ok": False, "message": str(e)})
+                return
+            self._send_json(handler, 200, {
+                "ok": ok, "message": message, "enabled": _autostart_enabled(),
+            })
             return
 
         if path == "/api/pet/restart":
@@ -545,24 +680,49 @@ class ManagementServer:
 
         if path.startswith("/api/games/"):
             rest = path[len("/api/games/"):]
+            gm = getattr(p, "game_manager", None)
+            root = getattr(p, "root", None)
+
             if rest.endswith("/toggle"):
                 key = unquote(rest[: -len("/toggle")])
                 enabled = bool(data.get("enabled"))
-                if hasattr(p, "game_manager") and hasattr(p.game_manager, "set_enabled"):
-                    p.game_manager.set_enabled(key, enabled)
+                if gm is not None and hasattr(gm, "set_enabled"):
+                    gm.set_enabled(key, enabled)  # 纯配置写入，无 Tk 调用
                 self._send_json(handler, 200, self._games_payload())
                 return
+
             if rest.endswith("/start"):
                 key = unquote(rest[: -len("/start")])
-                if hasattr(p, "game_manager") and hasattr(p.game_manager, "start"):
-                    p.game_manager.start(key)
-                self._send_json(handler, 200, self._games_payload())
+                # 启停必须回到 Tk 主线程：GameManager 会创建 Toplevel/after，
+                # 从 HTTP 工作线程直接调用会跨线程操作 Tk
+                if gm is not None and root is not None:
+                    root.after(50, lambda k=key: gm.start(k))
+                self._send_json(handler, 200, self._games_payload(active_key=key))
                 return
+
             if rest == "stop" or rest.endswith("/stop"):
-                if hasattr(p, "game_manager") and hasattr(p.game_manager, "stop"):
-                    p.game_manager.stop()
-                self._send_json(handler, 200, self._games_payload())
+                if gm is not None and root is not None:
+                    root.after(50, gm.stop)
+                self._send_json(handler, 200, self._games_payload(clear_active=True))
                 return
+
+        if path == "/api/memory":
+            mf = getattr(p, "memory_facts", None)
+            if mf is None:
+                self._send_json(handler, 200, {"ok": False, "message": "长期记忆不可用"})
+                return
+            if "enabled" in data:
+                mf.set_enabled(bool(data.get("enabled")))
+            text = str(data.get("text") or "").strip()
+            added = None
+            if text:
+                added = mf.add(text, source="manual")
+            self._send_json(handler, 200, {
+                "ok": True,
+                "added": added is not None,
+                "memory": self._facts_payload(),
+            })
+            return
 
         if path == "/api/skills/import":
             filename = str(data.get("filename") or "")
@@ -627,6 +787,19 @@ class ManagementServer:
                 self.pet.chat_history.clear()
             self._send_json(handler, 200, {"ok": True})
             return
+        if path == "/api/memory":
+            mf = getattr(self.pet, "memory_facts", None)
+            if mf is None:
+                self._send_json(handler, 200, {"ok": False})
+                return
+            self._send_json(handler, 200, {"ok": True, "cleared": mf.clear()})
+            return
+        if path.startswith("/api/memory/"):
+            fact_id = unquote(path[len("/api/memory/"):])
+            mf = getattr(self.pet, "memory_facts", None)
+            ok = bool(mf is not None and mf.remove(fact_id))
+            self._send_json(handler, 200, {"ok": ok})
+            return
         if path.startswith("/api/skills/"):
             name = unquote(path[len("/api/skills/"):])
             ok = False
@@ -641,7 +814,7 @@ class ManagementServer:
     _LOG_POLL = 0.4
 
     def _log_file_path(self) -> str:
-        return os.path.join(os.path.dirname(get_data_path("x.log")), "logs", self.LOG_FILE)
+        return os.path.join(get_log_dir(), self.LOG_FILE)
 
     def _log_offset(self) -> int:
         try:
