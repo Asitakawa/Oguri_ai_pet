@@ -16,9 +16,10 @@ _DEBOUNCE_SECONDS = 5.0
 
 class ChatHistoryManager:
     def __init__(self, file_path: str = "chat_history.json",
-                 max_length: int = 2000) -> None:
+                 max_length: int = 2000, companion=None) -> None:
         self.file_path = file_path
         self.max_length = max_length
+        self._companion = companion
         self._lock = threading.Lock()
         self.history: List[dict] = []
         self.stats: Dict[str, Optional[str]] = {"total_messages": 0, "last_updated": None}
@@ -99,6 +100,18 @@ class ChatHistoryManager:
                 "content": content,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
             })
+            # max_length 必须在这里也生效：只在 load() 时裁剪的话，
+            # 长跑的进程会把整个会话史无界地留在内存并反复整份写盘
+            overflow = len(self.history) - self.max_length
+            if overflow > 0:
+                del self.history[:overflow]
+        # 一轮 = 一次 assistant 回复。计数放在这里，桌宠输入条与管理面板
+        # 两条路径都会经过，且不会重复计
+        if role == "assistant" and self._companion is not None:
+            try:
+                self._companion.bump("chat_rounds")
+            except Exception:
+                log.debug("聊天轮数计数失败", exc_info=True)
         self.save()
 
     def get_context(self, size: int = 100) -> List[dict]:
