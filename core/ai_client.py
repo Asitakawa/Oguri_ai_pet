@@ -29,9 +29,21 @@ _PERSONALITY = (
 
 
 class AIClient:
-    def __init__(self) -> None:
+    def __init__(self, facts=None) -> None:
         self._session = requests.Session()
+        self._facts = facts
         self._reload()
+
+    def _system_prompt(self) -> str:
+        """人格主体 + 长期记忆。facts 关闭或无内容时就是原始人格。"""
+        base = cfg.SYSTEM_PROMPT
+        if self._facts is None:
+            return base
+        try:
+            block = self._facts.prompt_block()
+        except Exception:
+            return base
+        return f"{base}\n\n{block}" if block else base
 
     def _reload(self) -> None:
         s = load_api_settings()
@@ -78,7 +90,7 @@ class AIClient:
 
         for attempt in range(max_retries):
             try:
-                messages: List[dict] = [{"role": "system", "content": cfg.SYSTEM_PROMPT}]
+                messages: List[dict] = [{"role": "system", "content": self._system_prompt()}]
                 if history_context:
                     messages.extend([
                         {"role": m["role"], "content": m["content"]}
@@ -191,9 +203,21 @@ class AIClient:
             result = random.choice(cfg.FALLBACK_AI_RESPONSES)
         return result, img_base64
 
-    def auto_talk_prompt(self, history_context: Optional[List[dict]] = None) -> str:
+    def auto_talk_prompt(self, history_context: Optional[List[dict]] = None,
+                         reason: str = "") -> str:
+        """主动搭话。
+
+        reason 是情境触发原因（如「同一件事连续写代码快 50 分钟了」），
+        有的话就顺着这个由头说，比凭空发起话题自然得多。
+        """
         img_base64 = self.capture_screen()
-        prompt = f"小栗帽想和训练员说说话：\n{_PERSONALITY}"
+        if reason:
+            prompt = (
+                f"你注意到训练员这边的情况：{reason}。\n"
+                f"用这个由头跟训练员说一句话，别生硬地报时间。\n{_PERSONALITY}"
+            )
+        else:
+            prompt = f"小栗帽想和训练员说说话：\n{_PERSONALITY}"
         result = self.call(prompt, img_base64, history_context=history_context)
         if result is None:
             result = random.choice(cfg.FALLBACK_TALK_TEXTS)
