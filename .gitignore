@@ -12,3 +12,6 @@ dist/
 *.spec
 !main.spec
 *.exe
+
+# 本地发布产物（exe、校验和、发布说明草稿）
+release/
