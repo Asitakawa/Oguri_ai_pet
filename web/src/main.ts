@@ -16,9 +16,9 @@ if (!app) throw new Error("#app not found");
 app.innerHTML = `
   <div class="shell">
     <aside class="sidebar">
-      <div class="sidebar-brand"><span class="brand-dot"></span><span>小栗帽管理面板</span></div>
+      <div class="sidebar-brand"><span class="brand-dot"></span><span>小栗帽</span></div>
       <nav class="nav" id="nav"></nav>
-      <div class="sidebar-foot">v0.2 · 阶段 2</div>
+      <div class="sidebar-foot" id="sidebar-foot"></div>
     </aside>
     <div class="main">
       <header class="topbar">
@@ -30,17 +30,17 @@ app.innerHTML = `
         </div>
       </header>
       <div class="conn-banner" id="conn-banner" hidden>
-        ⚠ 未连接到桌宠服务：请确认桌宠正在运行。桌宠每次启动地址/token 都会变化，
-        若已重启，请用桌宠启动日志中打印的新地址重新打开本页。
+        <span>未连接到桌宠服务：请确认桌宠正在运行。桌宠每次启动地址与 token 都会变化，
+        若已重启，请从桌宠右键菜单 →「打开管理面板」重新进入。</span>
       </div>
       <main class="content" id="view-root"></main>
     </div>
   </div>
-  <button class="theme-toggle" id="theme-toggle" title="切换主题">☀️</button>`;
+  <button class="theme-toggle" id="theme-toggle" title="切换主题">浅色</button>`;
 
 const nav = document.getElementById("nav")!;
 nav.innerHTML = Object.values(routes)
-  .map((v) => `<a class="nav-item" data-route="${v.id}" href="#/${v.id}">${v.icon}<span>${v.title}</span></a>`)
+  .map((v) => `<a class="nav-item" data-route="${v.id}" href="#/${v.id}"><span>${v.title}</span></a>`)
   .join("");
 
 const viewRoot = document.getElementById("view-root")!;
@@ -112,6 +112,20 @@ const syncMini = () => {
 syncMini();
 store.subscribe(syncMini);
 
+// 侧栏页脚：显示与桌宠的连接状态，比一个静态版本号有用
+const footEl = document.getElementById("sidebar-foot");
+const syncFoot = () => {
+  const s = store.getState();
+  if (footEl) {
+    footEl.innerHTML = s.connected
+      ? `<span>已连接</span>`
+      : `<span>未连接</span>`;
+    footEl.classList.toggle("offline", !s.connected);
+  }
+};
+syncFoot();
+store.subscribe(syncFoot);
+
 // ---- 主题切换（暖色玻璃 / 深色工业）----
 // 首屏主题已由 index.html 的内联脚本定好，这里只负责按钮状态与后续切换
 const THEME_KEY = "mgmt_theme";
@@ -122,7 +136,8 @@ const currentTheme = (): "light" | "dark" =>
 const applyTheme = (theme: "light" | "dark", persist: boolean) => {
   document.documentElement.dataset.theme = theme === "light" ? "light" : "";
   if (themeBtn) {
-    themeBtn.textContent = theme === "light" ? "🌙" : "☀️";
+    // 按钮写"切换到哪个主题"，不做图标
+    themeBtn.textContent = theme === "light" ? "深色" : "浅色";
     themeBtn.title = theme === "light" ? "切换为深色工业风" : "切换为暖色玻璃风";
   }
   if (persist) {

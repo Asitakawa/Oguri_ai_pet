@@ -4,11 +4,12 @@ const CIRC = 2 * Math.PI * R;
 export interface RingOpts {
   id: string;
   label: string;
-  icon: string;
   pct: number;
-  color: string; // CSS 变量名，如 "--c-rose"
+  /** CSS 变量名，必须是实色，如 "--ring-hunger" */
+  color: string;
 }
 
+/** 状态环：只有弧线 + 百分比数字 + 文字标签，不放图标 */
 export function ringHTML(o: RingOpts): string {
   const off = CIRC * (1 - o.pct / 100);
   return `
@@ -19,7 +20,6 @@ export function ringHTML(o: RingOpts): string {
         stroke="var(${o.color})" stroke-dasharray="${CIRC}" stroke-dashoffset="${off}"/>
     </svg>
     <div class="ring-center">
-      <div class="ring-icon">${o.icon}</div>
       <div class="ring-pct" id="${o.id}-pct">${Math.round(o.pct)}%</div>
     </div>
     <div class="ring-label">${o.label}</div>

@@ -14,7 +14,7 @@ function msgHTML(m: ChatMessage): string {
   const isUser = m.role === "user";
   return `
   <div class="chat-msg ${isUser ? "user" : "pet"}">
-    <div class="chat-avatar">${isUser ? "🧑‍💻" : "🍥"}</div>
+    <div class="chat-avatar"></div>
     <div class="chat-bubble">
       <div class="chat-meta">${isUser ? "训练员" : "小栗帽"} · ${escapeHtml(m.timestamp)}</div>
       <div class="chat-text">${escapeHtml(m.content)}</div>
@@ -30,15 +30,14 @@ function scrollBottom(): void {
 export const Chat: View = {
   id: "chat",
   title: "聊天",
-  icon: "💬",
   render() {
     return `
     <div class="view view-chat">
       <section class="glass-card chat-panel">
         <div class="chat-toolbar">
           <input id="chat-search" class="input" type="search" placeholder="搜索聊天记录…" />
-          <button class="btn" data-action="export">⬇ 导出</button>
-          <button class="btn btn-danger" data-action="clear">🗑 清空</button>
+          <button class="btn" data-action="export">导出</button>
+          <button class="btn btn-danger" data-action="clear">清空</button>
         </div>
         <div class="chat-list" id="chat-list"><div class="chat-empty">加载中…</div></div>
         <div class="chat-input-row">

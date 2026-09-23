@@ -51,17 +51,16 @@ function paramInput(p: SkillParam): string {
 export const Skills: View = {
   id: "skills",
   title: "技能",
-  icon: "⚡",
   render() {
     return `
     <div class="view view-skills">
       <section class="glass-card">
         <header class="card-head">
-          <span class="card-icon">⚡</span><h3>技能管理</h3>
+          <h3>技能管理</h3>
           <span class="spacer"></span>
           <input type="file" id="skill-file" accept=".py,.zip" hidden />
-          <button class="btn" data-action="import">+ 导入技能</button>
-          <button class="btn" data-action="refresh">↺ 刷新</button>
+          <button class="btn" data-action="import">导入技能</button>
+          <button class="btn" data-action="refresh">刷新</button>
         </header>
         <div class="skill-list" id="skill-list"><div class="chat-empty">加载中…</div></div>
       </section>
@@ -92,8 +91,8 @@ export const Skills: View = {
                 <input type="checkbox" data-name="${escapeHtml(s.name)}" ${s.enabled ? "checked" : ""}/>
                 <span></span>
               </label>
-              <button class="btn btn-sm" data-action="detail" data-name="${escapeHtml(s.name)}">📖 详情</button>
-              <button class="btn btn-sm btn-danger" data-action="delete" data-name="${escapeHtml(s.name)}">🗑 删除</button>
+              <button class="btn btn-sm" data-action="detail" data-name="${escapeHtml(s.name)}">详情</button>
+              <button class="btn btn-sm btn-danger" data-action="delete" data-name="${escapeHtml(s.name)}">删除</button>
             </div>
           </div>`).join("")
         : '<div class="chat-empty">还没有技能，点「+ 导入技能」添加</div>';
@@ -121,9 +120,9 @@ export const Skills: View = {
         el.hidden = false;
         el.innerHTML = `
           <header class="card-head">
-            <span class="card-icon">📖</span><h3>${escapeHtml(d.name)}</h3>
+            <h3>${escapeHtml(d.name)}</h3>
             <span class="spacer"></span>
-            <button class="btn btn-sm" data-action="detail-close">✕ 关闭</button>
+            <button class="btn btn-sm" data-action="detail-close">关闭</button>
           </header>
           <div class="skill-meta">目录：${escapeHtml(d.dirname)} · 状态：${d.enabled ? "已启用" : "已停用"}</div>
           <div class="skill-desc">${escapeHtml(d.description || "（无描述）")}</div>
@@ -141,7 +140,7 @@ export const Skills: View = {
             ${d.parameters.length ? d.parameters.map(paramInput).join("") : '<div class="chat-empty">该技能无参数，直接执行</div>'}
             <div class="row-end">
               <span class="form-msg" id="skill-test-msg"></span>
-              <button class="btn btn-primary" data-action="execute" data-name="${escapeHtml(d.name)}">▶ 执行</button>
+              <button class="btn btn-primary" data-action="execute" data-name="${escapeHtml(d.name)}">执行</button>
             </div>
             <pre class="skill-result" id="skill-result" hidden></pre>
           </div>`;

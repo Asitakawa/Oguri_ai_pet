@@ -13,7 +13,7 @@ function cardHTML(g: GameInfo): string {
     <div class="game-head">
       <b>${escapeHtml(g.name)}</b>
       ${g.active
-        ? '<span class="badge badge-active">▶ 游玩中</span>'
+        ? '<span class="badge badge-active">游玩中</span>'
         : g.enabled
           ? '<span class="badge">已启用</span>'
           : '<span class="badge badge-off">已停用</span>'}
@@ -25,8 +25,8 @@ function cardHTML(g: GameInfo): string {
         <span></span>
       </label>
       ${g.active
-        ? '<button class="btn btn-danger btn-sm" data-action="stop">⏹ 退出游戏</button>'
-        : `<button class="btn btn-primary btn-sm" data-action="start" data-key="${escapeHtml(g.key)}" ${g.enabled ? "" : "disabled"}>▶ 启动</button>`}
+        ? '<button class="btn btn-danger btn-sm" data-action="stop">退出游戏</button>'
+        : `<button class="btn btn-primary btn-sm" data-action="start" data-key="${escapeHtml(g.key)}" ${g.enabled ? "" : "disabled"}>启动</button>`}
     </div>
   </div>`;
 }
@@ -54,12 +54,11 @@ function stopPolling(): void {
 export const Games: View = {
   id: "games",
   title: "游戏",
-  icon: "🎮",
   render() {
     return `
     <div class="view view-games">
       <section class="glass-card">
-        <header class="card-head"><span class="card-icon">🎮</span><h3>小游戏</h3></header>
+        <header class="card-head"><h3>小游戏</h3></header>
         <div class="game-grid" id="game-grid"><div class="chat-empty">加载中…</div></div>
       </section>
     </div>`;

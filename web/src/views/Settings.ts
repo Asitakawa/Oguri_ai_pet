@@ -27,16 +27,15 @@ function setTextById(id: string, text: string): void {
 export const Settings: View = {
   id: "settings",
   title: "设置",
-  icon: "⚙️",
   render() {
     return `
     <div class="view view-settings">
       <div class="load-error" id="settings-load-error" hidden>
         <span id="settings-load-error-text">无法加载设置</span>
-        <button class="btn btn-sm" data-action="reload">↻ 重试</button>
+        <button class="btn btn-sm" data-action="reload">重试</button>
       </div>
       <section class="glass-card">
-        <header class="card-head"><span class="card-icon">🔑</span><h3>API 设置</h3></header>
+        <header class="card-head"><h3>API 设置</h3></header>
         <div class="form-grid">
           <label>厂商
             <select id="set-provider" class="input"></select>
@@ -47,19 +46,19 @@ export const Settings: View = {
           <label>API Key
             <span class="key-row">
               <input id="set-key" class="input" type="password" placeholder="sk-…" autocomplete="off" />
-              <button class="btn btn-sm" id="set-key-toggle" type="button">👁</button>
+              <button class="btn btn-sm" id="set-key-toggle" type="button" title="显示 / 隐藏 Key">显示</button>
             </span>
           </label>
         </div>
         <div class="row-end">
           <span class="form-msg" id="api-msg"></span>
-          <button class="btn" data-action="api-test">🔌 测试连接</button>
-          <button class="btn btn-primary" data-action="api-save">💾 保存</button>
+          <button class="btn" data-action="api-test">测试连接</button>
+          <button class="btn btn-primary" data-action="api-save">保存</button>
         </div>
       </section>
 
       <section class="glass-card">
-        <header class="card-head"><span class="card-icon">📏</span><h3>宠物外观</h3></header>
+        <header class="card-head"><h3>宠物外观</h3></header>
         <div class="form-grid">
           <label>大小 <b id="size-label">100%</b>
             <input id="set-size" type="range" min="50" max="200" step="10" />
@@ -67,13 +66,13 @@ export const Settings: View = {
         </div>
         <div class="row-end">
           <span class="form-msg" id="size-msg"></span>
-          <button class="btn" data-action="size-reset">↺ 重置 100%</button>
-          <button class="btn btn-primary" data-action="size-save">💾 保存</button>
+          <button class="btn" data-action="size-reset">重置 100%</button>
+          <button class="btn btn-primary" data-action="size-save">保存</button>
         </div>
       </section>
 
       <section class="glass-card">
-        <header class="card-head"><span class="card-icon">🔤</span><h3>字体设置</h3></header>
+        <header class="card-head"><h3>字体设置</h3></header>
         <div class="form-grid">
           <label>字体族
             <select id="set-font-family" class="input"></select>
@@ -85,12 +84,12 @@ export const Settings: View = {
         <div class="font-preview" id="font-preview">小栗帽的回复会变成这样</div>
         <div class="row-end">
           <span class="form-msg" id="font-msg"></span>
-          <button class="btn btn-primary" data-action="font-save">💾 保存</button>
+          <button class="btn btn-primary" data-action="font-save">保存</button>
         </div>
       </section>
 
       <section class="glass-card">
-        <header class="card-head"><span class="card-icon">🧠</span><h3>聊天记忆</h3></header>
+        <header class="card-head"><h3>聊天记忆</h3></header>
         <div class="form-grid">
           <label>记忆轮数
             <input id="mem-rounds" class="input" type="number" min="5" max="250" />
@@ -99,13 +98,13 @@ export const Settings: View = {
         <p class="mem-hint">AI 对话时会把最近 <b id="mem-current">—</b> 轮对话（每轮含一问一答）作为上下文背景。轮数越多小栗帽越记得之前的聊天，但消耗的 token 也越多。范围 <span id="mem-hint-range">—</span>。</p>
         <div class="row-end">
           <span class="form-msg" id="mem-msg"></span>
-          <button class="btn" data-action="mem-default">↺ 恢复默认</button>
-          <button class="btn btn-primary" data-action="mem-save">💾 保存</button>
+          <button class="btn" data-action="mem-default">恢复默认</button>
+          <button class="btn btn-primary" data-action="mem-save">保存</button>
         </div>
       </section>
 
       <section class="glass-card">
-        <header class="card-head"><span class="card-icon">🧠</span><h3>长期记忆</h3></header>
+        <header class="card-head"><h3>长期记忆</h3></header>
         <p class="mem-hint">
           小栗帽会把聊过的内容提炼成关于你的简短事实，跨会话记住。全部存在本机
           <code>facts.json</code>，只在对话时连同上下文发给你自己配置的模型厂商。
@@ -117,17 +116,17 @@ export const Settings: View = {
           </label>
           <span class="memory-state" id="mem-state">—</span>
           <span class="spacer"></span>
-          <button class="btn btn-sm btn-danger" data-action="mem-clear">🗑 清空全部</button>
+          <button class="btn btn-sm btn-danger" data-action="mem-clear">清空全部</button>
         </div>
         <div class="memory-list" id="memory-list"><div class="chat-empty">加载中…</div></div>
         <div class="memory-add">
           <input id="mem-new" class="input" placeholder="手动加一条，例如「训练员叫小林」" />
-          <button class="btn" data-action="mem-add">+ 添加</button>
+          <button class="btn" data-action="mem-add">添加</button>
         </div>
       </section>
 
       <section class="glass-card">
-        <header class="card-head"><span class="card-icon">⚙</span><h3>系统设置</h3></header>
+        <header class="card-head"><h3>系统设置</h3></header>
         <div class="form-grid cols-2">
           <label>AI 最短间隔(s)<input id="sys-min" class="input" type="number" /></label>
           <label>AI 最长间隔(s)<input id="sys-max" class="input" type="number" /></label>
@@ -136,13 +135,13 @@ export const Settings: View = {
         </div>
         <div class="row-end">
           <span class="form-msg" id="sys-msg"></span>
-          <button class="btn" data-action="sys-default">↺ 恢复默认</button>
-          <button class="btn btn-primary" data-action="sys-save">💾 保存</button>
+          <button class="btn" data-action="sys-default">恢复默认</button>
+          <button class="btn btn-primary" data-action="sys-save">保存</button>
         </div>
       </section>
 
       <section class="glass-card">
-        <header class="card-head"><span class="card-icon">🖥️</span><h3>进程控制</h3></header>
+        <header class="card-head"><h3>进程控制</h3></header>
         <div class="memory-head">
           <label class="switch" title="开机自动启动">
             <input type="checkbox" id="auto-start" />
@@ -153,8 +152,8 @@ export const Settings: View = {
         <p class="mem-hint">数据目录：<code id="data-dir">—</code></p>
         <div class="row-end">
           <span class="form-msg" id="proc-msg"></span>
-          <button class="btn" data-action="restart">🔄 重启桌宠</button>
-          <button class="btn btn-danger" data-action="quit">🚪 退出桌宠</button>
+          <button class="btn" data-action="restart">重启桌宠</button>
+          <button class="btn btn-danger" data-action="quit">退出桌宠</button>
         </div>
       </section>
     </div>`;
@@ -218,7 +217,11 @@ export const Settings: View = {
       );
       el<HTMLButtonElement>("set-key-toggle")?.addEventListener("click", () => {
         const k = el<HTMLInputElement>("set-key");
-        if (k) k.type = k.type === "password" ? "text" : "password";
+        const btn = el<HTMLButtonElement>("set-key-toggle");
+        if (!k) return;
+        const hidden = k.type === "password";
+        k.type = hidden ? "text" : "password";
+        if (btn) btn.textContent = hidden ? "隐藏" : "显示";
       });
       const apiPayload = () => ({
         provider: provSel.value,
@@ -396,7 +399,7 @@ export const Settings: View = {
               <div class="memory-item">
                 <span class="memory-text">${escapeHtml(f.text)}</span>
                 <span class="memory-meta">${escapeHtml(f.created_at || "")}</span>
-                <button class="btn btn-sm btn-danger" data-action="mem-del" data-id="${escapeAttr(f.id)}">✕</button>
+                <button class="btn btn-sm btn-danger" data-action="mem-del" data-id="${escapeAttr(f.id)}" title="删除这条记忆"></button>
               </div>`).join("")
           : '<div class="chat-empty">还没有记住什么，多聊几句就有了</div>';
       };

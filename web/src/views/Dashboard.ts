@@ -1,7 +1,6 @@
 import { gsap } from "gsap";
 import type { Ctx, View } from "./types";
 import { api, describeError, openLogStream } from "../api/client";
-import { petAvatarHTML } from "../components/PetAvatar";
 import { ringHTML, ringUpdate } from "../components/StatusRing";
 import { cardHTML } from "../components/GlassCard";
 
@@ -23,7 +22,6 @@ const TERM_PAUSE_BUFFER = 4000;
 export const Dashboard: View = {
   id: "dashboard",
   title: "仪表盘",
-  icon: "🏠",
   render(ctx) {
     const s = ctx.store.getState();
     const cpu = s.sysCpu == null ? "—" : `${Math.round(s.sysCpu)}%`;
@@ -31,19 +29,34 @@ export const Dashboard: View = {
     return `
     <div class="view view-dashboard">
       <section class="dash-hero glass-card">
-        <div class="dash-hero-left">${petAvatarHTML()}</div>
+        <div class="dash-hero-left">
+          <div class="dash-readout">
+            <div class="readout-row">
+              <span class="readout-label">饱腹</span>
+              <b class="readout-value" id="read-hunger">${Math.round(s.hunger)}</b>
+            </div>
+            <div class="readout-row">
+              <span class="readout-label">活力</span>
+              <b class="readout-value" id="read-energy">${Math.round(s.energy)}</b>
+            </div>
+            <div class="readout-row">
+              <span class="readout-label">技能</span>
+              <b class="readout-value" id="read-skills">${s.enabledSkills}/${s.totalSkills}</b>
+            </div>
+          </div>
+        </div>
         <div class="dash-hero-mid">
           <h2>你好，训练员</h2>
           <p class="dash-sub" id="dash-sub">${s.connected ? "小栗帽在线，状态实时同步中" : "未连接桌宠（可能已退出或重启）"}</p>
           <div class="quick-actions">
-            <button class="btn btn-primary" data-action="feed">🍙 喂饭团</button>
-            <button class="btn" data-action="chat">💬 打开聊天</button>
-            <button class="btn" data-action="game">🎮 快速开一局</button>
+            <button class="btn btn-primary" data-action="feed">喂饭团</button>
+            <button class="btn" data-action="chat">打开聊天</button>
+            <button class="btn" data-action="game">快速开一局</button>
           </div>
         </div>
         <div class="dash-hero-right">
-          ${ringHTML({ id: "ring-hunger", label: "饱腹", icon: "🍙", pct: s.hunger, color: "--ring-hunger" })}
-          ${ringHTML({ id: "ring-energy", label: "活力", icon: "⚡", pct: s.energy, color: "--ring-energy" })}
+          ${ringHTML({ id: "ring-hunger", label: "饱腹", pct: s.hunger, color: "--ring-hunger" })}
+          ${ringHTML({ id: "ring-energy", label: "活力", pct: s.energy, color: "--ring-energy" })}
         </div>
       </section>
       <section class="dash-stats">
@@ -53,7 +66,7 @@ export const Dashboard: View = {
             <div class="stat"><b id="dash-uptime">${fmtUptime(s.uptimeSec)}</b><span>本次运行</span></div>
             <div class="stat"><b id="dash-skills">${s.enabledSkills}/${s.totalSkills}</b><span>已启用技能</span></div>
             <div class="stat"><b id="dash-cpu">${cpu}</b><span>CPU</span></div>
-          </div>`, { icon: "📊" })}
+          </div>`)}
         ${s.companion ? cardHTML("一起走过", `
           <div class="stat-grid">
             <div class="stat"><b id="dash-days">${s.companion.daysTogether}</b><span>相处天数</span></div>
@@ -62,12 +75,12 @@ export const Dashboard: View = {
             <div class="stat"><b id="dash-games">${s.companion.gamesPlayed}</b><span>开局次数</span></div>
             <div class="stat"><b id="dash-fly">${s.companion.maxFlyMeters}m</b><span>飞行纪录</span></div>
             <div class="stat"><b id="dash-drag">${s.companion.dragCount}</b><span>被拖走</span></div>
-          </div>`, { icon: "🍙" }) : ""}
+          </div>`) : ""}
         ${cardHTML("进程", `
           <div class="stat-grid">
             <div class="stat"><b id="dash-mem">${mem}</b><span>内存占用</span></div>
             <div class="stat"><b id="dash-online">${s.connected ? "在线" : "离线"}</b><span>桌宠连接</span></div>
-          </div>`, { icon: "🖥️" })}
+          </div>`)}
       </section>
       <section class="glass-card dash-terminal" id="dash-terminal">
         <header class="term-head">
@@ -77,9 +90,9 @@ export const Dashboard: View = {
             <span class="term-conn" id="term-conn">连接中…</span>
           </div>
           <div class="term-tools">
-            <button class="btn btn-sm" id="term-pause" data-term="pause">⏸ 暂停</button>
-            <button class="btn btn-sm" id="term-clear" data-term="clear">🧹 清空</button>
-            <button class="btn btn-sm" id="term-toggle" data-term="toggle">▾ 折叠</button>
+            <button class="btn btn-sm" id="term-pause" data-term="pause"><span id="term-pause-label">暂停</span></button>
+            <button class="btn btn-sm" id="term-clear" data-term="clear">清空</button>
+            <button class="btn btn-sm" id="term-toggle" data-term="toggle"><span id="term-toggle-label">折叠</span></button>
           </div>
         </header>
         <div class="term-body" id="term-body">
@@ -110,7 +123,8 @@ export const Dashboard: View = {
     const termPause = document.getElementById("term-pause");
     const termToggle = document.getElementById("term-toggle");
     if (terminalCollapsed) termEl?.classList.add("collapsed");
-    if (termToggle) termToggle.textContent = terminalCollapsed ? "▸ 展开" : "▾ 折叠";
+    const initToggleLabel = document.getElementById("term-toggle-label");
+    if (initToggleLabel) initToggleLabel.textContent = terminalCollapsed ? "展开" : "折叠";
 
     let offset = 0;
     let paused = false;
@@ -195,13 +209,15 @@ export const Dashboard: View = {
     termToggle?.addEventListener("click", () => {
       terminalCollapsed = !terminalCollapsed;
       termEl?.classList.toggle("collapsed", terminalCollapsed);
-      if (termToggle) termToggle.textContent = terminalCollapsed ? "▸ 展开" : "▾ 折叠";
+      const tLabel = document.getElementById("term-toggle-label");
+      if (tLabel) tLabel.textContent = terminalCollapsed ? "展开" : "折叠";
       if (!terminalCollapsed && termBody) termBody.scrollTop = termBody.scrollHeight;
     });
     termPause?.addEventListener("click", () => {
       paused = !paused;
       if (termPause) {
-        termPause.textContent = paused ? "▶ 继续" : "⏸ 暂停";
+        const pLabel = document.getElementById("term-pause-label");
+        if (pLabel) pLabel.textContent = paused ? "继续" : "暂停";
         termPause.classList.toggle("active", paused);
       }
       if (!paused && pending.length) {
@@ -261,7 +277,10 @@ export const Dashboard: View = {
       if (s.sysMemMB !== prev.sysMemMB) setText("dash-mem", s.sysMemMB == null ? "—" : `${Math.round(s.sysMemMB)}MB`);
       if (s.enabledSkills !== prev.enabledSkills || s.totalSkills !== prev.totalSkills) {
         setText("dash-skills", `${s.enabledSkills}/${s.totalSkills}`);
+        setText("read-skills", `${s.enabledSkills}/${s.totalSkills}`);
       }
+      if (s.hunger !== prev.hunger) setText("read-hunger", String(Math.round(s.hunger)));
+      if (s.energy !== prev.energy) setText("read-energy", String(Math.round(s.energy)));
       if (s.connected !== prev.connected) {
         setText("dash-online", s.connected ? "在线" : "离线");
         setText("dash-sub", s.connected ? "小栗帽在线，状态实时同步中" : "未连接桌宠（可能已退出或重启）");
